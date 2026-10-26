@@ -174,7 +174,13 @@ class AgentShield(_Base):
         """Poll until a reviewer decides. Returns 'allow', 'denied', 'expired' or 'timeout'; only 'allow' lets the action run."""
         deadline = time.monotonic() + timeout_s
         while True:
-            a = self._parse(self._send("GET", f"/v1/approvals/{approval_id}"), Approval)
+            try:
+                a = self._parse(self._send("GET", f"/v1/approvals/{approval_id}"), Approval)
+            except Unreachable:                                    # a blip while waiting is retried; it never counts as approval
+                if time.monotonic() >= deadline:
+                    return "timeout"
+                self._sleep(min(poll_s, max(0.0, deadline - time.monotonic())))
+                continue
             if a.status == "approved":
                 return "allow"
             if a.status in {"denied", "expired"}:
@@ -184,19 +190,20 @@ class AgentShield(_Base):
             self._sleep(min(poll_s, max(0.0, deadline - time.monotonic())))
 
     def authorize(self, tool: str, arguments: dict[str, Any], effect_tag: EffectTag | None, *, approval_timeout: float = 300) -> CheckResponse | None:
-        """Decide whether a call may run. Returns the response when AgentShield decided, None when the fail rule let a read tool through."""
+        """Decide whether a call may run. Returns the response when AgentShield decided, None when the fail rule let a read tool through.
+        The fail rule covers only the first call: once AgentShield has said `ask`, a human hold is never bypassed by an outage."""
         try:
             resp = self.check(tool, arguments, effect_tag=effect_tag, wait_seconds=min(30, int(approval_timeout)))
-            if resp.decision == "ask":
-                if not resp.approval_id:
-                    raise self._denied(resp, "ask")
-                outcome = self.wait_for_approval(resp.approval_id, approval_timeout)
-                if outcome != "allow":
-                    raise _not_approved(outcome, resp.trace_id)
-                return resp
         except Unreachable as exc:
             apply_fail_rule(effect_tag, exc)
             return None
+        if resp.decision == "ask":
+            if not resp.approval_id:
+                raise self._denied(resp, "ask")
+            outcome = self.wait_for_approval(resp.approval_id, approval_timeout)
+            if outcome != "allow":
+                raise _not_approved(outcome, resp.trace_id)
+            return resp
         if resp.decision == "block":
             raise self._denied(resp, "block")
         return resp
@@ -243,7 +250,13 @@ class AsyncAgentShield(_Base):
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout_s
         while True:
-            a = self._parse(await self._send("GET", f"/v1/approvals/{approval_id}"), Approval)
+            try:
+                a = self._parse(await self._send("GET", f"/v1/approvals/{approval_id}"), Approval)
+            except Unreachable:
+                if loop.time() >= deadline:
+                    return "timeout"
+                await self._sleep(min(poll_s, max(0.0, deadline - loop.time())))
+                continue
             if a.status == "approved":
                 return "allow"
             if a.status in {"denied", "expired"}:
@@ -255,16 +268,16 @@ class AsyncAgentShield(_Base):
     async def authorize(self, tool: str, arguments: dict[str, Any], effect_tag: EffectTag | None, *, approval_timeout: float = 300) -> CheckResponse | None:
         try:
             resp = await self.check(tool, arguments, effect_tag=effect_tag, wait_seconds=min(30, int(approval_timeout)))
-            if resp.decision == "ask":
-                if not resp.approval_id:
-                    raise self._denied(resp, "ask")
-                outcome = await self.wait_for_approval(resp.approval_id, approval_timeout)
-                if outcome != "allow":
-                    raise _not_approved(outcome, resp.trace_id)
-                return resp
         except Unreachable as exc:
             apply_fail_rule(effect_tag, exc)
             return None
+        if resp.decision == "ask":
+            if not resp.approval_id:
+                raise self._denied(resp, "ask")
+            outcome = await self.wait_for_approval(resp.approval_id, approval_timeout)
+            if outcome != "allow":
+                raise _not_approved(outcome, resp.trace_id)
+            return resp
         if resp.decision == "block":
             raise self._denied(resp, "block")
         return resp

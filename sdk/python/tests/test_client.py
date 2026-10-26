@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -227,3 +228,57 @@ async def test_async_client_and_guard_behave_the_same():
     with pytest.raises(TypeError):
         shield.guard("x", "read")(lambda: None)
     await shield.aclose()
+
+
+@respx.mock
+@pytest.mark.parametrize("tag", ["read", "write", "external", None])
+def test_an_outage_while_waiting_for_a_reviewer_never_lets_the_tool_run(shield, tag):
+    """The fail rule covers the first call only. After `ask`, a held action stays held whatever its tag."""
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json=resp("ask", "hold-reads-too", approval_id="ap-1")))
+    respx.get(f"{BASE}/v1/approvals/ap-1").mock(side_effect=httpx.ConnectError("down"))
+
+    @shield.guard("some_tool", tag, approval_timeout=0.05)
+    def tool():
+        raise AssertionError("must not run")
+
+    with pytest.raises(Blocked) as e:
+        tool()
+    assert e.value.rule_id == "approval-timeout"
+
+
+@respx.mock
+def test_a_blip_while_waiting_is_retried_and_the_reviewer_can_still_approve(shield):
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json=resp("ask", "r", approval_id="ap-1")))
+    answers = iter([httpx.ConnectError("down"), httpx.Response(503), httpx.Response(200, json={"id": "ap-1", "status": "approved", "decision": "allow", "expires_at": "x"})])
+
+    def poll(req):
+        a = next(answers)
+        if isinstance(a, Exception):
+            raise a
+        return a
+
+    respx.get(f"{BASE}/v1/approvals/ap-1").mock(side_effect=poll)
+    ran = []
+
+    @shield.guard("read_secret", "read")
+    def tool():
+        ran.append(1)
+
+    tool()
+    assert ran == [1]
+
+
+@respx.mock
+async def test_async_outage_while_waiting_also_blocks():
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json=resp("ask", "r", approval_id="ap-1")))
+    respx.get(f"{BASE}/v1/approvals/ap-1").mock(side_effect=httpx.ConnectError("down"))
+    s = AsyncAgentShield(BASE, KEY, agent_id="a", tenant="t", sleep=lambda _: asyncio.sleep(0))
+
+    @s.guard("read_secret", "read", approval_timeout=0.05)
+    async def tool():
+        raise AssertionError("must not run")
+
+    with pytest.raises(Blocked) as e:
+        await tool()
+    assert e.value.rule_id == "approval-timeout"
+    await s.aclose()
