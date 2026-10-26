@@ -621,3 +621,15 @@ Written after the backend, dashboard, SDK, eval and demo were built. The behavio
 - **Classifier:** none is bundled and the one measured configuration is rules only; see `eval/README.md` and `docs/classifier.md`.
 - **M3 (MCP) is built without the sandbox runner.** Built: registry, tool-description scan (reusing the M2 scanner), name/shadowing check, capability review, optional source heuristics, fingerprint and drift suspension, human approval (with limits), and the MCP proxy at `POST /mcp/{agent_slug}` (namespaced `server__tool`, policy before forwarding, results scanned). Not built: the container sandbox run and dependency analysis. Policy rules can carry `server:` and then only match calls through that server.
 - **The demo tenant is set to `on_malicious: flag`** so the permission layer visibly stops an attack the scanner only flagged; the product default is `sanitize`.
+
+## M4 as built: Shadow AI from proxy / DNS logs
+
+Chosen data source: logs a person uploads or a log shipper sends (no browser extension, no content inspection).
+
+- `POST /v1/ingest/logs` (analyst, or an ingest-scoped token): `{source: proxy|dns, format: squid|common|dns|csv|records, batch_id, team?, lines[]|records[]}`; at most 5 MB and 20,000 lines; a bad line is counted as rejected, never fails the batch; the same `batch_id` is counted once per tenant (24 h, Redis).
+- Recognition: a hand-written catalog of AI services (host or parent domain), then a heuristic for any host serving a model-API path (`/v1/chat/completions`, `/v1/messages`, Azure deployments, Gemini `:generateContent`, Ollama). The inventory row records why it was recognised.
+- Inventory (`ai_tools_seen`, keyed by tenant, domain, team; team defaults to `unassigned`): hits, bytes out, first/last seen, and a people estimate from a per-tool HyperLogLog of keyed hashes. Names are never stored.
+- Classification (`PATCH /v1/admin/ai-tools/{id}`, admin): approved / tolerated / blocked; approving adds a suggested alternative that points at the gateway.
+- Events: `shadow.tool_seen` (new tool, or a blocked tool used again), `shadow.dlp_hit` (a single upload of 1 MB or more to an unapproved tool, only when the log carries upload sizes), `shadow.source_stale` (source silent for 24 h; `agentshield shadow-check`, once a day). All appear in alerts as kind `shadow_ai`.
+- Ingest tokens (`POST/GET/DELETE /v1/admin/tokens`, session auth only): `asu_` tokens with scope `ingest`, accepted only by the ingest endpoint.
+- Not done: content-level DLP, browser extension, automatic blocking at the proxy, a catalog beyond the hand-written one.

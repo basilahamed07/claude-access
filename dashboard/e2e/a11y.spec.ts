@@ -9,7 +9,7 @@ async function login(page: Page) {
   await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
 }
 
-const PAGES = ["/", "/sessions", "/approvals", "/agents", "/policies", "/mcp", "/alerts", "/settings"];
+const PAGES = ["/", "/sessions", "/approvals", "/agents", "/policies", "/mcp", "/shadow", "/alerts", "/settings"];
 
 for (const scheme of ["light", "dark"] as const) {
   test(`no serious or critical accessibility violations (${scheme})`, async ({ page }) => {

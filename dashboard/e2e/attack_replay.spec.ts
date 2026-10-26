@@ -140,3 +140,21 @@ test("an MCP server with a poisoned tool description is flagged, and approving i
   await expect(page.locator(".toast", { hasText: "Server approved" })).toBeVisible();
   await expect(dlg.getByText("Approved").first()).toBeVisible();
 });
+
+test("uploading a proxy log shows the AI tools seen, and a person can block one", async ({ page }) => {
+  await login(page, "/shadow");
+  await page.getByRole("button", { name: "Upload a log file" }).first().click();
+  const stamp = Math.floor(Date.now() / 1000);
+  const log = [`${stamp}.000 90 10.0.0.1 TCP_TUNNEL/200 4000 CONNECT chat.openai.com:443 alice HIER_DIRECT/1.1.1.1 -`,
+    `${stamp}.100 90 10.0.0.2 TCP_TUNNEL/200 4000 CONNECT chat.openai.com:443 bob HIER_DIRECT/1.1.1.1 -`,
+    `${stamp}.200 90 10.0.0.2 TCP_TUNNEL/200 4000 CONNECT intranet.example.com:443 bob HIER_DIRECT/10.1.1.1 -`].join("\n") + `\n# ${Date.now()}`;
+  await page.locator("#u-file").setInputFiles({ name: "squid.log", mimeType: "text/plain", buffer: Buffer.from(log) });
+  await page.getByRole("button", { name: "Upload", exact: true }).click();
+  await expect(page.getByText(/Read 3 lines/)).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+  const row = page.getByRole("row", { name: /chat\.openai\.com/ });
+  await expect(row).toBeVisible();
+  await expect(row.getByText("about 2")).toBeVisible();
+  await page.getByRole("button", { name: "Block chat.openai.com" }).click();
+  await expect(row.getByText("Blocked")).toBeVisible();
+});

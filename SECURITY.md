@@ -16,7 +16,7 @@ AgentShield sits between an AI agent and the model and tools it uses. It reduces
 | Secrets in logs | Redaction before anything is published; provider keys encrypted at rest and write-only in the API | Redaction is pattern based |
 | Cross-tenant access | Postgres row-level security on every tenant table, forced for the application role | Operators with the database owner role bypass it by design |
 
-MCP servers are scanned from their tool metadata (and source, if supplied) and re-checked for changes; the sandbox run described in the design is not implemented. Not covered yet: shadow-AI discovery (designed in `docs/superpowers/specs/`, not built).
+MCP servers are scanned from their tool metadata (and source, if supplied) and re-checked for changes; the sandbox run described in the design is not implemented. Shadow-AI discovery reads proxy / DNS logs sent by a person or an ingest token. Ingest tokens are scoped to the ingest endpoint only, shown once, stored as an HMAC, and stop working when their owner is disabled; user names in logs are hashed into a cardinality estimate and never stored. Outbound requests to tenant-supplied URLs are checked against an allow-list of globally routable addresses both before the request and at connect time (the address that was checked is the address dialled, so DNS rebinding does not help), including IPv4 hidden in NAT64, 6to4, Teredo and IPv4-mapped IPv6. MCP tool results of every block type are scanned or withheld, and a server that cannot be checked is not used.
 
 ## Hardening you should do when you deploy
 - Put TLS in front, set `AGENTSHIELD_COOKIE_SECURE=true`, and keep `/metrics` internal.

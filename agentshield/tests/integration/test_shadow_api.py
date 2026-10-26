@@ -168,3 +168,7 @@ async def test_a_token_stops_working_when_its_owner_is_disabled(api):
     uid = next(u["id"] for u in users if u["email"] == analyst.email)
     assert (await admin.patch(f"/v1/admin/users/{uid}", {"disabled": True})).status_code == 200
     assert (await c.post("/v1/ingest/logs", json=batch("o2"), headers=auth)).status_code == 401
+
+
+async def test_a_token_row_without_a_scope_is_restricted(owner_conn):
+    assert "ingest" in str(await owner_conn.fetchval("select column_default from information_schema.columns where table_name = 'user_tokens' and column_name = 'scope'"))
