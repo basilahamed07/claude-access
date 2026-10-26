@@ -12,6 +12,7 @@ const NAV: { to: string; label: string; role?: "analyst" | "admin" }[] = [
   { to: "/agents", label: "Agents" },
   { to: "/policies", label: "Policies" },
   { to: "/mcp", label: "MCP servers" },
+  { to: "/shadow", label: "Shadow AI" },
   { to: "/alerts", label: "Alerts" },
   { to: "/settings", label: "Settings" },
 ];

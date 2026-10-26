@@ -62,8 +62,8 @@ async def classify_tool(tool_id: UUID, body: AiToolUpdate, request: Request, ctx
     return AiToolRead(**row)
 
 
-# Ingest tokens are ordinary user tokens (`asu_…`) that belong to the person who minted them, so they carry that person's role and stop
-# working when the person is disabled. They can only be minted from a signed-in session, never with another token.
+# Ingest tokens are user tokens (`asu_…`) with scope 'ingest': they work for /v1/ingest/logs and nothing else, and stop working when the person
+# who made them is disabled. They can only be minted from a signed-in session, never with another token.
 @router.post("/v1/admin/tokens", status_code=201, response_model=TokenIssued)
 async def create_token(body: TokenCreate, request: Request, ctx: TenantContext = Depends(user_ctx("analyst"))) -> TokenIssued:
     if ctx.auth_method != "session":
@@ -72,7 +72,7 @@ async def create_token(body: TokenCreate, request: Request, ctx: TenantContext =
     issued = issue_user_token(state.pepper)
     async with tenant_tx(state.engine, ctx.tenant_id) as conn:
         row = (await conn.execute(text(
-            "insert into user_tokens (tenant_id, user_id, prefix, token_hash, label) values (:t, :u, :p, :h, :l) returning id, prefix, label, created_at, revoked_at"),
+            "insert into user_tokens (tenant_id, user_id, prefix, token_hash, label, scope) values (:t, :u, :p, :h, :l, 'ingest') returning id, prefix, label, created_at, revoked_at"),
             {"t": ctx.tenant_id, "u": ctx.actor_id, "p": issued.prefix, "h": issued.hash, "l": body.label})).mappings().one()
     return TokenIssued(**row, token=issued.plaintext)
 

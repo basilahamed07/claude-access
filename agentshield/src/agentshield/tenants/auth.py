@@ -119,7 +119,10 @@ async def _user_from_token(state: AppState, token: str) -> TenantContext:
     if not verify_secret(state.pepper, token, row["token_hash"]) or row["revoked_at"] is not None:
         raise _unauth()
     return TenantContext(tenant_id=row["tenant_id"], actor="user", actor_id=row["user_id"], role=row["role"],
-                         auth_method="token")
+                         auth_method="token", token_scope=row["scope"])
+
+
+INGEST_PATHS = {"/v1/ingest/logs"}
 
 
 def user_ctx(minimum: Role = "viewer") -> Callable[[Request], Awaitable[TenantContext]]:
@@ -132,6 +135,8 @@ def user_ctx(minimum: Role = "viewer") -> Callable[[Request], Awaitable[TenantCo
             ctx = await _user_from_session(request, state, cookie)
         else:
             raise _unauth()
+        if ctx.token_scope == "ingest" and request.url.path not in INGEST_PATHS:
+            raise ApiError("forbidden", "This token can only send logs")
         if ROLE_RANK[ctx.role or "viewer"] < ROLE_RANK[minimum]:
             raise ApiError("forbidden", f"Requires role {minimum}")
         request.state.ctx = ctx

@@ -48,7 +48,10 @@ def _is_public(addr: str) -> bool:
         if v4 is not None and not _is_public(str(v4)):
             return False
     # An allow-list, not a deny-list: only globally routable addresses pass (this also excludes 100.64.0.0/10 carrier-grade NAT).
-    return ip.is_global and not (ip.is_multicast or ip.is_unspecified or ip.is_loopback or ip.is_link_local)
+    if isinstance(ip, ipaddress.IPv6Address) and int(ip) >> 32 == 0 and int(ip) > 1:        # ::/96, an IPv4 address in IPv6 clothing
+        return False
+    # the older deny-list stays beside the allow-list, so a gap in one is covered by the other
+    return ip.is_global and not (ip.is_private or ip.is_reserved or ip.is_multicast or ip.is_unspecified or ip.is_loopback or ip.is_link_local)
 
 
 def validate_outbound_url(url: str, *, allow_private: set[str] | None = None,

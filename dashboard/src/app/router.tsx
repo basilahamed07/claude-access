@@ -17,6 +17,7 @@ const PoliciesPage = lazy(() => import("../features/policies/PoliciesPage"));
 const AlertsPage = lazy(() => import("../features/alerts/AlertsPage"));
 const SettingsPage = lazy(() => import("../features/settings/SettingsPage"));
 const McpPage = lazy(() => import("../features/mcp/McpPage"));
+const ShadowPage = lazy(() => import("../features/shadow/ShadowPage"));
 
 export function makeQueryClient() {
   return new QueryClient({
@@ -56,6 +57,7 @@ export function AppRoutes() {
             <Route path="policies/:slug" element={<PoliciesPage />} />
             <Route path="mcp" element={<McpPage />} />
             <Route path="mcp/:id" element={<McpPage />} />
+            <Route path="shadow" element={<ShadowPage />} />
             <Route path="alerts" element={<AlertsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

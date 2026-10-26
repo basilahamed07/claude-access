@@ -11,7 +11,7 @@ import { DecisionsChart, hourlyBuckets } from "./DecisionsChart";
 type Alert = Schemas["AlertRead"];
 export const ALERT_WORDS: Record<Alert["kind"], string> = {
   blocked_call: "Action blocked", malicious_content: "Attack found in content", approval_expired: "Approval expired, counted as denied",
-  budget_exceeded: "Budget or rate limit hit", audit_gap: "Audit events were delayed",
+  budget_exceeded: "Budget or rate limit hit", audit_gap: "Audit events were delayed", shadow_ai: "Unreviewed AI tool or log source change",
 };
 
 export default function OverviewPage() {

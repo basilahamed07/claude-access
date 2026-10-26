@@ -131,6 +131,9 @@ async def test_ingest_tokens_work_for_ingest_only_and_can_be_revoked(api):
     auth = {"Authorization": f"Bearer {t['token']}"}
     assert (await c.post("/v1/ingest/logs", json=batch("t1"), headers=auth)).status_code == 200
     assert (await c.post("/v1/admin/tokens", json={"label": "chained"}, headers=auth)).status_code == 403         # a token cannot mint tokens
+    for path in ("/v1/admin/agents", "/v1/admin/ai-tools", "/v1/admin/mcp-servers", "/v1/admin/users"):          # and it reaches nothing but ingest
+        r = await c.get(path, headers=auth)
+        assert r.status_code == 403 and "only send logs" in r.json()["detail"], path
     assert (await acct.delete(f"/v1/admin/tokens/{t['id']}")).status_code == 204
     assert (await c.post("/v1/ingest/logs", json=batch("t2"), headers=auth)).status_code == 401
 
@@ -152,3 +155,16 @@ async def test_roles_and_tenant_isolation(api):
 
 
 _ = datetime, UTC
+
+
+async def test_a_token_stops_working_when_its_owner_is_disabled(api):
+    admin = await api.signup()
+    analyst = await api.add_user(admin, "analyst")
+    t = (await analyst.post("/v1/admin/tokens", {"label": "shipper"})).json()
+    auth = {"Authorization": f"Bearer {t['token']}"}
+    c = api.client()
+    assert (await c.post("/v1/ingest/logs", json=batch("o1"), headers=auth)).status_code == 200
+    users = (await admin.get("/v1/admin/users")).json()["items"]
+    uid = next(u["id"] for u in users if u["email"] == analyst.email)
+    assert (await admin.patch(f"/v1/admin/users/{uid}", {"disabled": True})).status_code == 200
+    assert (await c.post("/v1/ingest/logs", json=batch("o2"), headers=auth)).status_code == 401

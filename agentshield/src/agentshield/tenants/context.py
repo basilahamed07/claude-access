@@ -18,6 +18,7 @@ class TenantContext:
     agent_slug: str | None = None
     role: Role | None = None
     auth_method: str = ""
+    token_scope: str = "full"
 
     def has_role(self, minimum: Role) -> bool:
         return self.role is not None and ROLE_RANK[self.role] >= ROLE_RANK[minimum]
