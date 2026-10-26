@@ -108,3 +108,14 @@ test("connect a new agent: the key is shown once and the snippet contains it", a
   await expect(page.getByText(`${key.slice(0, 16)}…`)).toBeVisible();
   await expect(page.getByText(key)).toHaveCount(0);
 });
+
+test("a new visitor can create a workspace from the login page and land in it", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByRole("link", { name: "Create a workspace" }).click();
+  await page.getByLabel("Workspace name").fill("E2E Workspace");
+  await page.getByLabel("Your email").fill(`e2e-${Date.now()}@example.com`);
+  await page.getByLabel("Password").fill("a-long-passphrase-for-e2e");
+  await page.getByRole("button", { name: "Create workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
+  await expect(page.getByText("No agents yet")).toBeVisible();
+});

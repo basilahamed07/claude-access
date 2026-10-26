@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "rea
 import { ApiProblem } from "../api/client";
 import { SessionProvider, loginUrl, useSession } from "../api/session";
 import { LoginPage } from "../features/auth/LoginPage";
+import { SignupPage } from "../features/auth/SignupPage";
 import { Skeleton } from "../ui/states";
 import { ToastProvider } from "../ui/toast";
 import { AppShell } from "./AppShell";
@@ -41,6 +42,7 @@ export function AppRoutes() {
     <Suspense fallback={<main><Skeleton /></main>}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
             <Route index element={<OverviewPage />} />

@@ -58,3 +58,49 @@ describe("auth shell", () => {
   });
 });
 void Route; void Routes;
+
+describe("sign up", () => {
+  const fill = async (pw = "a-long-passphrase-1") => {
+    await userEvent.type(await screen.findByLabelText("Workspace name"), "Acme");
+    await userEvent.type(screen.getByLabelText("Your email"), "ana@acme.com");
+    await userEvent.type(screen.getByLabelText("Password"), pw);
+  };
+
+  it("creates the workspace, signs in and lands on Agents", async () => {
+    let signedIn = false;
+    const { calls } = mockApi({
+      "GET /v1/auth/me": () => (signedIn ? json(ME) : problem(401, "unauthenticated", "Sign in")),
+      "POST /v1/signup": json({ tenant_id: "t1", slug: "acme" }, { status: 201 }),
+      "POST /v1/auth/login": () => { signedIn = true; return json({ user_id: "u1", tenant_id: "t1", role: "admin", csrf_token: "c" }); },
+      "GET /v1/admin/agents": { items: [] }, "GET /v1/admin/approvals": { items: [] },
+    });
+    renderApp(<AppRoutes />, { path: "/signup" });
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create workspace" }));
+    expect(await screen.findByRole("heading", { name: "Agents" })).toBeInTheDocument();
+    expect(calls.find((c) => c.path === "/v1/signup")!.body).toEqual({ tenant_name: "Acme", email: "ana@acme.com", password: "a-long-passphrase-1" });
+  });
+
+  it("explains a short password and keeps the button off", async () => {
+    mockApi({ "GET /v1/auth/me": problem(401, "unauthenticated", "x") });
+    renderApp(<AppRoutes />, { path: "/signup" });
+    await fill("short");
+    expect(screen.getByText("Use at least 12 characters (5 so far).")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create workspace" })).toBeDisabled();
+  });
+
+  it.each([[403, "forbidden", "Sign-up is turned off on this installation. Ask an administrator to add you."],
+    [409, "conflict", "That workspace name or e-mail is already registered"]])("shows the reason when the API says %s", async (status, code, expected) => {
+    mockApi({ "GET /v1/auth/me": problem(401, "unauthenticated", "x"), "POST /v1/signup": problem(status, code, "That workspace name or e-mail is already registered") });
+    renderApp(<AppRoutes />, { path: "/signup" });
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create workspace" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(expected);
+  });
+
+  it("is linked from the login page", async () => {
+    mockApi({ "GET /v1/auth/me": problem(401, "unauthenticated", "x") });
+    renderApp(<AppRoutes />, { path: "/login" });
+    expect(await screen.findByRole("link", { name: "Create a workspace" })).toHaveAttribute("href", "/signup");
+  });
+});

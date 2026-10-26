@@ -22,12 +22,7 @@ Requires Docker. The whole stack (Postgres, Redis, gateway, audit worker, dashbo
 ```bash
 make up                 # generates secrets in deploy/.env on first run
 ```
-Create your tenant (the dashboard has no sign-up page yet), or run `make seed` for a demo tenant with a recorded attack (it prints a generated password):
-```bash
-curl -s localhost:8000/v1/signup -H 'content-type: application/json' \
-  -d '{"tenant_name":"Acme","email":"you@acme.com","password":"choose-a-long-passphrase"}'
-```
-Open <http://localhost:8080>, sign in, add a model provider under **Settings**, then **Agents > Connect agent**. It gives you a key and a snippet. The only change in your agent is the connection:
+Open <http://localhost:8080> and **Create a workspace** (or run `make seed` for a demo tenant with a recorded attack; it prints a generated password). Add a model provider under **Settings**, then **Agents > Connect agent**. It gives you a key and a snippet. The only change in your agent is the connection:
 
 ```python
 from openai import OpenAI

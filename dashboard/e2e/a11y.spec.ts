@@ -17,6 +17,9 @@ for (const scheme of ["light", "dark"] as const) {
     await page.goto("/login");
     let results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
     expect(results.violations.filter((v) => v.impact === "serious" || v.impact === "critical"), "login").toEqual([]);
+    await page.goto("/signup");
+    results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+    expect(results.violations.filter((v) => v.impact === "serious" || v.impact === "critical"), "signup").toEqual([]);
     await login(page);
     for (const path of PAGES) {
       await page.goto(path);

@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiProblem, api, setCsrf, type Schemas } from "../../api/client";
 import { safeNext, useSession } from "../../api/session";
 
@@ -43,6 +43,7 @@ export function LoginPage() {
         <div className="field"><label htmlFor="password">Password</label>
           <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></div>
         <button className="btn primary" type="submit" disabled={busy}>{busy ? "Signing in" : "Sign in"}</button>
+        <p className="small">New here? <Link to="/signup">Create a workspace</Link></p>
       </form>
     </main>
   );
