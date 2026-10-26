@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ..db.engine import create_engine
+from ..proxy.upstream import UpstreamClient
 from ..settings import Settings
 
 
@@ -19,6 +20,7 @@ class AppState:
     engine: AsyncEngine
     redis: aioredis.Redis
     http: httpx.AsyncClient
+    upstream: UpstreamClient
     pepper: bytes
     master_key: bytes
     jwt_secret: str
@@ -26,11 +28,13 @@ class AppState:
 
 
 async def init_state(app: FastAPI, settings: Settings) -> AppState:
+    http = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=5.0), follow_redirects=False)
     state = AppState(
         settings=settings,
         engine=create_engine(settings.database_url),
         redis=aioredis.from_url(settings.redis_url, decode_responses=False),
-        http=httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=5.0), follow_redirects=False),
+        http=http,
+        upstream=UpstreamClient(http, allow_private=settings.private_hosts, max_bytes=settings.upstream_max_bytes),
         pepper=settings.pepper_bytes,
         master_key=settings.master_key_bytes,
         jwt_secret=settings.jwt_secret_value,

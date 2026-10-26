@@ -103,6 +103,17 @@ class UpstreamUpdate(In):
     judge_model: str | None = None
 
 
+class UpstreamTestRequest(In):
+    model: str | None = Field(default=None, max_length=200)
+
+
+class UpstreamTestResult(Out):
+    ok: bool
+    status: int | None = None
+    latency_ms: int
+    error: str | None = None
+
+
 class UpstreamRead(Out):
     id: UUID
     name: str

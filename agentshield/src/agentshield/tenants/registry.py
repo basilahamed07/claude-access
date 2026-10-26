@@ -217,7 +217,8 @@ async def require_upstream(conn: AsyncConnection, upstream_id: UUID) -> None:
 # ── agents ──────────────────────────────────────────────────────────────────────────────────────
 _AGENT_COLS = (
     "a.id, a.slug, a.name, a.owner, a.purpose, a.risk_tier, a.mode, a.key_mode, a.upstream_id, "
-    "a.active_policy_version, a.status, a.last_seen_at, a.created_at, a.updated_at, "
+    "a.active_policy_version, a.status, a.created_at, a.updated_at, "
+    "(select max(s.last_seen_at) from sessions s where s.agent_id = a.id) as last_seen_at, "
     "(select count(*) from agent_keys k where k.agent_id = a.id and k.revoked_at is null "
     " and (k.expires_at is null or k.expires_at > now())) as key_count"
 )
@@ -313,3 +314,13 @@ async def expire_key_after(conn: AsyncConnection, agent_id: UUID, key_id: UUID, 
         {"s": overlap_seconds, "k": key_id, "a": agent_id})
     if res.rowcount == 0:
         raise ApiError("not_found", "Active key not found")
+
+
+# ── proxy configuration ─────────────────────────────────────────────────────────────────────────
+async def get_proxy_config(conn: AsyncConnection, agent_id: UUID) -> Row | None:
+    row = (await conn.execute(text(
+        "select a.id as agent_id, a.slug, a.mode, a.key_mode, a.status, a.active_policy_version, a.risk_tier, "
+        "u.id as upstream_id, u.name as upstream_name, u.kind, u.base_url, u.key_ciphertext, u.model_map, "
+        "u.judge_model from agents a left join upstreams u on u.id = a.upstream_id where a.id = :a"),
+        {"a": agent_id})).mappings().first()
+    return as_dict(row) if row else None

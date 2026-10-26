@@ -295,7 +295,6 @@ create table agents (
   upstream_id           uuid references upstreams(id),
   active_policy_version int,
   status                text not null default 'active' check (status in ('active','suspended')),
-  last_seen_at          timestamptz,
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
   unique (tenant_id, slug)
@@ -340,6 +339,7 @@ create table sessions (
   last_seen_at timestamptz not null default now(),
   unique (tenant_id, agent_id, session_key)
 );
+create index sessions_agent_idx on sessions (agent_id, last_seen_at desc);   -- agents.last_seen_at is derived: max over sessions (a column would change the ETag on every request)
 create index sessions_tenant_last_seen_idx on sessions (tenant_id, last_seen_at desc);
 
 create table approvals (

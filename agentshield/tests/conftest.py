@@ -292,3 +292,46 @@ async def api(app: FastAPI, redis_client: Any, monkeypatch: pytest.MonkeyPatch) 
     helper = Api(app, redis_client)
     yield helper
     await helper.aclose()
+
+
+# ── stub provider ───────────────────────────────────────────────────────────────────────────────
+from agentshield.testing.stub_upstream import StubUpstream  # noqa: E402
+
+
+@pytest_asyncio.fixture
+async def stub(app: FastAPI) -> AsyncIterator[StubUpstream]:
+    """Route the gateway's upstream traffic to an in-process scripted provider."""
+    s = StubUpstream()
+    client = httpx.AsyncClient(transport=httpx.ASGITransport(app=s.app), base_url="http://stub")
+    state = app.state.s
+    original = state.upstream.http
+    state.upstream.http = client
+    yield s
+    state.upstream.http = original
+    await client.aclose()
+
+
+class ProxyWorld:
+    def __init__(self, acct: Account, openai_key: str, anthropic_key: str, api: Api) -> None:
+        self.acct, self.openai_key, self.anthropic_key, self.api = acct, openai_key, anthropic_key, api
+
+    def oa(self, key: str | None = None, **headers: str) -> dict[str, str]:
+        return {"Authorization": f"Bearer {key or self.openai_key}", **headers}
+
+    def an(self, key: str | None = None, **headers: str) -> dict[str, str]:
+        return {"x-api-key": key or self.anthropic_key, "anthropic-version": "2023-06-01", **headers}
+
+
+@pytest_asyncio.fixture
+async def world(api: Api, stub: StubUpstream) -> ProxyWorld:
+    acct = await api.signup()
+    await acct.make_upstream("oa", kind="openai", base_url="https://api.openai.com/v1", api_key="sk-provider-openai",
+                             model_map={"fast": {"model": "gpt-4.1-mini"}})
+    up_an = await acct.make_upstream("an", kind="anthropic", base_url="https://api.anthropic.com",
+                                     api_key="sk-ant-provider")
+    up_oa = (await acct.get("/v1/admin/upstreams")).json()
+    oa_id = next(u["id"] for u in up_oa if u["name"] == "oa")
+    await acct.make_agent("oa-agent", upstream_id=oa_id)
+    await acct.make_agent("an-agent", upstream_id=up_an["id"])
+    k1, k2 = await acct.make_key("oa-agent"), await acct.make_key("an-agent")
+    return ProxyWorld(acct, k1["key"], k2["key"], api)

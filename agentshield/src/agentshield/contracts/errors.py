@@ -39,10 +39,10 @@ class ApiError(Exception):
 
     def __init__(self, code: str, detail: str | None = None, *, title: str | None = None,
                  errors: list[dict[str, Any]] | None = None,
-                 headers: dict[str, str] | None = None) -> None:
+                 headers: dict[str, str] | None = None, status: int | None = None) -> None:
         super().__init__(detail or code)
         self.code = code
-        self.status = STATUS_BY_CODE[code]
+        self.status = status or STATUS_BY_CODE[code]
         self.title = title or code.replace("_", " ").capitalize()
         self.detail = detail
         self.errors = errors

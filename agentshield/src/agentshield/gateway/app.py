@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from ..settings import Settings, get_settings
 from .errors import RequestIdMiddleware, install_error_handlers
 from .idempotency import IdempotencyMiddleware
-from .routes import admin_agents, admin_settings, admin_upstreams, admin_users, auth, health
+from .routes import admin_agents, admin_settings, admin_upstreams, admin_users, auth, health, proxy
 from .state import close_state, init_state
 
 
@@ -42,6 +42,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)
-    for module in (health, auth, admin_agents, admin_upstreams, admin_users, admin_settings):
+    for module in (health, auth, proxy, admin_agents, admin_upstreams, admin_users, admin_settings):
         app.include_router(module.router)
     return app

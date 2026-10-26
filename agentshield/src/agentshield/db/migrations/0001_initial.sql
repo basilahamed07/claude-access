@@ -99,7 +99,6 @@ create table if not exists agents (
   upstream_id           uuid references upstreams(id),
   active_policy_version int,
   status                text not null default 'active' check (status in ('active','suspended')),
-  last_seen_at          timestamptz,
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
   unique (tenant_id, slug)
@@ -145,7 +144,7 @@ create table if not exists sessions (
   last_seen_at timestamptz not null default now(),
   unique (tenant_id, agent_id, session_key)
 );
-create index if not exists sessions_agent_idx on sessions (agent_id);
+create index if not exists sessions_agent_idx on sessions (agent_id, last_seen_at desc);
 create index if not exists sessions_tenant_last_seen_idx on sessions (tenant_id, last_seen_at desc);
 
 create table if not exists approvals (

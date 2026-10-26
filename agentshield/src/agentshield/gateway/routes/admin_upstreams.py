@@ -2,17 +2,26 @@
 
 from __future__ import annotations
 
+import time
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from ...contracts.admin import UpstreamCreate, UpstreamRead, UpstreamUpdate
+from ...contracts.admin import (
+    UpstreamCreate,
+    UpstreamRead,
+    UpstreamTestRequest,
+    UpstreamTestResult,
+    UpstreamUpdate,
+)
 from ...contracts.errors import ApiError
 from ...db.tenant_tx import tenant_tx
+from ...proxy.upstream import Api, UpstreamConfig
 from ...tenants import registry
 from ...tenants.auth import user_ctx
 from ...tenants.context import TenantContext
-from ...tenants.crypto import encrypt_secret
+from ...tenants.crypto import decrypt_secret, encrypt_secret
 from ...tenants.urls import UnsafeURL, avalidate_outbound_url
 from ..state import get_state
 
@@ -79,3 +88,33 @@ async def delete_upstream(upstream_id: UUID, request: Request,
     async with tenant_tx(get_state(request).engine, ctx.tenant_id) as conn:
         await registry.delete_upstream(conn, upstream_id)
     return Response(status_code=204)
+
+
+@router.post("/{upstream_id}/test", response_model=UpstreamTestResult)
+async def test_upstream(upstream_id: UUID, request: Request, body: UpstreamTestRequest | None = None,
+                        ctx: TenantContext = Depends(user_ctx("admin"))) -> UpstreamTestResult:
+    """Send a 1-token request to verify URL, key and model. The provider's reply body is never returned."""
+    state = get_state(request)
+    async with tenant_tx(state.engine, ctx.tenant_id) as conn:
+        row = await registry.get_upstream_secret(conn, upstream_id)
+    cfg = UpstreamConfig(id=str(row["id"]), name=row["name"], kind=row["kind"], base_url=row["base_url"],
+                         api_key=None, model_map=row["model_map"] or {}, judge_model=row["judge_model"])
+    model = (body.model if body else None) or cfg.judge_model
+    if not model and cfg.model_map:
+        first: Any = next(iter(cfg.model_map.values()))
+        model = first.get("model") if isinstance(first, dict) else None
+    if not model:
+        raise ApiError("validation_failed", "Provide a model: none is configured on this upstream",
+                       errors=[{"path": "model", "message": "required"}])
+    api: Api = "anthropic" if cfg.kind == "anthropic" else "openai"
+    key = decrypt_secret(state.master_key, row["key_ciphertext"]) if row["key_ciphertext"] else None
+    started = time.monotonic()
+    try:
+        resp = await state.upstream.complete(
+            cfg, api, {"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "ping"}]}, {}, key)
+    except ApiError as exc:
+        return UpstreamTestResult(ok=False, status=None, latency_ms=int((time.monotonic() - started) * 1000),
+                                  error=exc.code)
+    return UpstreamTestResult(ok=resp.status_code < 400, status=resp.status_code,
+                              latency_ms=int((time.monotonic() - started) * 1000),
+                              error=None if resp.status_code < 400 else f"http_{resp.status_code}")

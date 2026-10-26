@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -18,6 +19,34 @@ log = logging.getLogger("agentshield")
 PROBLEM = "application/problem+json"
 _CODE_BY_STATUS = {404: "not_found", 405: "not_found", 401: "unauthenticated", 403: "forbidden",
                    413: "payload_too_large"}
+
+
+# Proxy routes answer in the provider's own error shape so agent SDKs handle failures natively.
+PROXY_API_BY_PATH = {"/v1/messages": "anthropic", "/v1/chat/completions": "openai", "/v1/models": "openai"}
+_PROVIDER_TYPES: dict[str, tuple[str, str, str]] = {   # code -> (anthropic type, openai type, openai code)
+    "unauthenticated": ("authentication_error", "invalid_request_error", "invalid_api_key"),
+    "forbidden": ("permission_error", "invalid_request_error", "forbidden"),
+    "credential_mismatch": ("permission_error", "invalid_request_error", "forbidden"),
+    "not_found": ("not_found_error", "invalid_request_error", "not_found"),
+    "rate_limited": ("rate_limit_error", "rate_limit_error", "rate_limit_exceeded"),
+    "budget_exceeded": ("rate_limit_error", "rate_limit_error", "budget_exceeded"),
+    "payload_too_large": ("request_too_large", "invalid_request_error", "request_too_large"),
+    "validation_failed": ("invalid_request_error", "invalid_request_error", "invalid_request"),
+    "upstream_error": ("api_error", "server_error", "upstream_error"),
+    "upstream_timeout": ("timeout_error", "server_error", "upstream_timeout"),
+    "internal": ("api_error", "server_error", "internal_error"),
+}
+
+
+def provider_error_response(request: Request, api: str, code: str, message: str, *, status: int,
+                            headers: dict[str, str] | None = None) -> JSONResponse:
+    a_type, o_type, o_code = _PROVIDER_TYPES.get(code, ("invalid_request_error", "invalid_request_error", code))
+    rid = getattr(request.state, "request_id", None)
+    if api == "anthropic":
+        body: dict[str, Any] = {"type": "error", "error": {"type": a_type, "message": message}, "request_id": rid}
+    else:
+        body = {"error": {"message": message, "type": o_type, "param": None, "code": o_code}}
+    return JSONResponse(body, status_code=status, headers=headers)
 
 
 def problem_response(request: Request, code: str, detail: str | None = None, *, status: int | None = None,
@@ -42,6 +71,10 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError) -> JSONResponse:
+        proxy_api = PROXY_API_BY_PATH.get(request.url.path)
+        if proxy_api:
+            return provider_error_response(request, proxy_api, exc.code, exc.detail or exc.title,
+                                           status=exc.status, headers=exc.headers)
         return problem_response(request, exc.code, exc.detail, errors=exc.errors,
                                 headers=exc.headers, title=exc.title)
 
