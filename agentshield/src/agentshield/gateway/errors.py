@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
@@ -87,6 +88,15 @@ def install_error_handlers(app: FastAPI) -> None:
     async def _http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         code = _CODE_BY_STATUS.get(exc.status_code, "internal" if exc.status_code >= 500 else "validation_failed")
         return problem_response(request, code, str(exc.detail), status=exc.status_code)
+
+    @app.exception_handler(DBAPIError)
+    async def _database(request: Request, exc: DBAPIError) -> JSONResponse:
+        # Text that Postgres cannot store (a NUL character) is the caller's mistake, not an outage.
+        msg = str(exc.orig).lower() if exc.orig is not None else ""
+        if any(m in msg for m in ("\\u0000", "null byte", "invalid byte sequence", "unsupported unicode escape", "nul (0x00)")):
+            return problem_response(request, "validation_failed", "Text contains characters that cannot be stored (such as a NUL byte)")
+        log.exception("database error request_id=%s", getattr(request.state, "request_id", ""))
+        return problem_response(request, "internal", "Internal error")
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:

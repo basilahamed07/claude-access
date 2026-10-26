@@ -11,6 +11,7 @@ const NAV: { to: string; label: string; role?: "analyst" | "admin" }[] = [
   { to: "/approvals", label: "Approvals", role: "analyst" },
   { to: "/agents", label: "Agents" },
   { to: "/policies", label: "Policies" },
+  { to: "/mcp", label: "MCP servers" },
   { to: "/alerts", label: "Alerts" },
   { to: "/settings", label: "Settings" },
 ];

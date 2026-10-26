@@ -14,6 +14,7 @@ do not call a model through it can use the check API or the [Python SDK](sdk/pyt
 - **Decides before the tool runs.** A per-agent YAML policy: default deny, argument rules, scopes, budgets, and session risk that tightens everything after an attack is seen. A blocked call comes back as ordinary text in the model's reply ("Action blocked by AgentShield: ..."), not as an error.
 - **Asks a person.** Risky actions wait in an approval queue (dashboard and webhook); no answer in five minutes counts as a denial.
 - **Records everything.** Per-tenant hash-chained audit log, step-by-step replay, "what if the policy had been different?" re-checks, incidents and export.
+- **Vets tool servers.** MCP servers are scanned before an agent may use them (tool descriptions go through the same scanner, names are checked for shadowing, capabilities are compared with what you declared), approved by a person, fingerprinted, and suspended if they change afterwards. Approved servers are reachable through one MCP endpoint per agent (`/mcp/<agent id>`) where every call meets the policy and every result is scanned.
 - **Multi-tenant** with Postgres row-level security, per-agent keys, and a dashboard with roles.
 
 ## Quickstart (3 minutes)
@@ -93,7 +94,8 @@ The scan itself takes {{eval:rules:test:p50}} ms at the median and {{eval:rules:
 - **No detector is complete.** Rules miss paraphrases they have not seen, and the numbers above show it. A learned classifier helps but is not bundled, and no classifier is complete either.
 - **Allowed tools can still be misused.** If a policy lets an agent email an approved address, AgentShield cannot tell that the body is sensitive.
 - **Approximate replay.** Replay uses the redacted arguments stored in the log, so rules over redacted text may replay differently.
-- **Not built yet:** MCP server scanning and proxying, and shadow-AI discovery (both designed in `docs/superpowers/specs/`).
+- **MCP is checked from the outside.** The scan reads a server's tool list (and source files only if you supply them, with simple pattern checks). The sandbox run that would watch a server behave is **not implemented**, and every report says so. A server that is clean on paper can still misbehave when called; the proxy's policy and result scanning are the backstop.
+- **Not built yet:** shadow-AI discovery (designed in `docs/superpowers/specs/`).
 - **Tamper evidence is not tamper proof.** Someone with database owner rights can rewrite history; verification then fails.
 
 ## Layout

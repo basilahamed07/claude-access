@@ -76,14 +76,14 @@ class PolicyEnforcer:
 
     async def decide(self, ctx: TenantContext, agent: AgentInfo, session: SessionRef, tool: str,
                      arguments: Any, *, trace_id: str, source: str = "proxy", advised_tag: EffectTag | None = None,
-                     budget_unavailable: bool = False) -> CheckResponse:
+                     budget_unavailable: bool = False, server: str | None = None) -> CheckResponse:
         with span("agentshield.policy.decide", **{"agentshield.tool": tool, "agentshield.trace_id": trace_id}):
             return await self._decide(ctx, agent, session, tool, arguments, trace_id=trace_id, source=source,
-                                      advised_tag=advised_tag, budget_unavailable=budget_unavailable)
+                                      advised_tag=advised_tag, budget_unavailable=budget_unavailable, server=server)
 
     async def _decide(self, ctx: TenantContext, agent: AgentInfo, session: SessionRef, tool: str,
                       arguments: Any, *, trace_id: str, source: str, advised_tag: EffectTag | None,
-                      budget_unavailable: bool) -> CheckResponse:
+                      budget_unavailable: bool, server: str | None = None) -> CheckResponse:
         risk = session.risk_score
         evaluation: Evaluation | None = None
         failure: str | None = None
@@ -101,7 +101,7 @@ class PolicyEnforcer:
             approved = frozenset({(tool, digest)}) if await is_approved(self.redis, ctx.tenant_id, session.id, tool, digest) \
                 else frozenset()
             with timed(POLICY_EVAL.observe):
-                evaluation = evaluate(policy, tool, arguments, SessionState(risk, approved), advised_tag=advised_tag)
+                evaluation = evaluate(policy, tool, arguments, SessionState(risk, approved), advised_tag=advised_tag, server=server)
         except Exception as exc:                                      # noqa: BLE001
             failure = type(exc).__name__
             log.exception("policy decision failed for tool %s", tool)
@@ -146,12 +146,12 @@ class PolicyEnforcer:
         resp = CheckResponse(decision=decision, reason=reason, rule_id=evaluation.rule_id, risk_score=min(max(risk, 0.0), 1.0),
                              approval_id=approval_id, mode=mode, would_have=would_have, trace_id=trace_id,
                              findings=findings)
-        await self._audit(ctx, session, tool, arguments, evaluation, resp, source, failure)
+        await self._audit(ctx, session, tool, arguments, evaluation, resp, source, failure, server)
         return resp
 
     async def _audit(self, ctx: TenantContext, session: SessionRef, tool: str, arguments: Any, ev: Evaluation,
-                     resp: CheckResponse, source: str, failure: str | None) -> None:
-        base = {"tool": tool, "effect_tag": ev.effect_tag.value, "args_hash": ev.args_hash, "source": source}
+                     resp: CheckResponse, source: str, failure: str | None, server: str | None = None) -> None:
+        base = {"tool": tool, "effect_tag": ev.effect_tag.value, "args_hash": ev.args_hash, "source": source, **({"server": server} if server else {})}
         await self.emitter.emit(make_event(ctx, resp.trace_id, "gateway", EventType.tool_requested,
                                            f"{tool} requested ({ev.effect_tag.value})", session=session),
                                 {**base, "arguments": arguments if arguments is not None else {}})

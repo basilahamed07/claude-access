@@ -273,3 +273,30 @@ def test_evaluate_never_raises_on_hostile_input():
 def test_evaluation_is_deterministic():
     a = ev(SAMPLE, "send_email", {"to": "x@evil.com"})
     assert a == ev(SAMPLE, "send_email", {"to": "x@evil.com"})
+
+
+# ── MCP: rules scoped to a server ────────────────────────────────────────────────────────────────────
+SERVER_POLICY = """version: 1
+tools:
+  send_email: { effect_tag: external }
+rules:
+  - id: allow-mail-server-send
+    effect: allow
+    tool: send_email
+    server: mail
+  - id: block-send-anywhere-else
+    effect: block
+    tool: send_email
+    reason: "Only the approved mail server may send"
+"""
+
+
+def test_a_rule_with_a_server_only_applies_to_that_servers_calls():
+    from agentshield.policy.evaluator import evaluate
+    from agentshield.policy.loader import parse_policy
+    p = parse_policy(SERVER_POLICY)
+    assert evaluate(p, "send_email", {}, server="mail").decision.value == "block"       # block beats allow when both match
+    only = parse_policy(SERVER_POLICY.split("  - id: block-send-anywhere-else")[0])
+    assert evaluate(only, "send_email", {}, server="mail").rule_id == "allow-mail-server-send"
+    assert evaluate(only, "send_email", {}, server="evil").rule_id == "default-deny"      # same tool name on another server is not allowed
+    assert evaluate(only, "send_email", {}).rule_id == "default-deny"                      # nor is a call that did not come through MCP

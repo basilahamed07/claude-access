@@ -72,6 +72,7 @@ ignore = ["S101", "B008", "E501", "S105", "S106", "S107"]
 "src/agentshield/tenants/registry.py" = ["S608"]
 "src/agentshield/audit/*.py" = ["S608"]
 "src/agentshield/policy/*.py" = ["S608"]
+"src/agentshield/mcp/*.py" = ["S608"]
 "src/agentshield/gateway/routes/*.py" = ["S608"]
 
 [tool.mypy]

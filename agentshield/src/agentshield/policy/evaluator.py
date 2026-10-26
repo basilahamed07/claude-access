@@ -65,8 +65,9 @@ def args_hash(arguments: Mapping[str, Any] | str | None) -> str:
     return hashlib.sha256(parse_args(arguments)[2].encode()).hexdigest()
 
 
-def candidates(policy: CompiledPolicy, tool: str) -> list[CompiledRule]:
-    return [r for r in policy.rules if tool_matches(r, tool)]
+def candidates(policy: CompiledPolicy, tool: str, server: str | None = None) -> list[CompiledRule]:
+    """Rules for this tool name. A rule with `server:` applies only to calls that came through that MCP server; a rule without it applies to all."""
+    return [r for r in policy.rules if tool_matches(r, tool) and (r.doc.server is None or r.doc.server == server)]
 
 
 def _reason(rule: CompiledRule, verb: str) -> str:
@@ -74,7 +75,7 @@ def _reason(rule: CompiledRule, verb: str) -> str:
 
 
 def evaluate(policy: CompiledPolicy, tool: str, arguments: Mapping[str, Any] | str | None,
-             session: SessionState | None = None, *, advised_tag: EffectTag | None = None) -> Evaluation:
+             session: SessionState | None = None, *, advised_tag: EffectTag | None = None, server: str | None = None) -> Evaluation:
     session = session or SessionState()
     args, args_ok, canon = parse_args(arguments)
     digest = hashlib.sha256(canon.encode()).hexdigest()
@@ -86,7 +87,7 @@ def evaluate(policy: CompiledPolicy, tool: str, arguments: Mapping[str, Any] | s
         if len(canon) > MAX_ARGS_BYTES:
             raise EvaluationError("arguments too large")
         env = Env(args=args, risk_score=session.risk_score, scopes=policy.doc.scopes)
-        matched = [r for r in candidates(policy, tool) if r.condition.test(env)]
+        matched = [r for r in candidates(policy, tool, server) if r.condition.test(env)]
     except Exception as exc:                                    # noqa: BLE001  (fail closed, see arch §8.6)
         if tag in FAIL_OPEN_TAGS:
             return Evaluation(Decision.allow, f"{EVALUATOR_ERROR}-fail-open",

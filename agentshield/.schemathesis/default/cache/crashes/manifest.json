@@ -3,6 +3,6 @@
   "schemathesis_version": "4.32.5",
   "schema_location": "openapi.json",
   "base_url": "http://127.0.0.1:8765",
-  "created_at": "2026-10-26T13:51:23.079359+00:00",
+  "created_at": "2026-10-26T17:35:05.726224+00:00",
   "tls_verify": true
 }

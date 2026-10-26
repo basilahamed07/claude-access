@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from ..audit.emitter import Emitter
 from ..audit.spool import Spool
 from ..db.engine import create_engine
+from ..mcp.service import McpService
 from ..policy.approvals import ApprovalsService
 from ..policy.budgets import BudgetTracker
 from ..policy.cache import PolicyCache
@@ -39,6 +40,7 @@ class AppState:
     rules: RuleStore
     classifier: ClassifierHandle
     scanner: ScanService
+    mcp: McpService
     pepper: bytes
     master_key: bytes
     jwt_secret: str
@@ -64,6 +66,8 @@ async def init_state(app: FastAPI, settings: Settings) -> AppState:
     scanner = ScanService(engine=engine, redis=redis, emitter=emitter, rules=rules, classifier=classifier,
                           upstream=upstream_client, master_key=settings.master_key_bytes,
                           judge_timeout=settings.judge_timeout_seconds)
+    mcp = McpService(engine=engine, emitter=emitter, scanner=scanner, http_provider=lambda: upstream_client.http, master_key=settings.master_key_bytes,
+                     allow_private=settings.private_hosts)
     state = AppState(
         settings=settings,
         engine=engine,
@@ -76,6 +80,7 @@ async def init_state(app: FastAPI, settings: Settings) -> AppState:
         rules=rules,
         classifier=classifier,
         scanner=scanner,
+        mcp=mcp,
         http=http,
         upstream=upstream_client,
         pepper=settings.pepper_bytes,

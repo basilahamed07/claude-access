@@ -219,6 +219,12 @@ class ScanService:
             return await judge_text(text_, self.upstream, cfg, key, model, source=source, timeout=self.judge_timeout)
         return run
 
+    async def config_for(self, tenant_id: UUID | str, *, with_judge: bool = False) -> ScanConfig:
+        """A scan configuration for work done outside a request (for example auditing an MCP server's tool descriptions)."""
+        ruleset = await self.rules.for_tenant(self.engine, tenant_id)
+        tcfg = await self.tenant_cfg(tenant_id)
+        return ScanConfig(ruleset, self.classifier, self._judge_fn(tcfg) if with_judge else None, "flag")
+
     async def scan_content(self, ctx: TenantContext, *, trace_id: str, session: SessionRef | None, source: str,
                            content_id: str, text_: str, force: str | None = None) -> ScanResult:
         """Scan one piece of untrusted content, raise the session risk, audit it. Never raises."""

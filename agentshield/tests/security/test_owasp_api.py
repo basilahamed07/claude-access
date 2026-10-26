@@ -179,3 +179,13 @@ async def test_huge_integers_are_rejected_before_they_reach_the_database(api):
     assert (await acct.get("/v1/admin/agents/big/policy/versions/3863834606")).status_code == 422
     assert (await acct.post("/v1/admin/agents/big/policy/versions/3863834606/activate", {}, headers={"If-Match": "*"})).status_code == 422
     assert (await acct.post("/v1/admin/agents/big/policy/versions", {"yaml": "version: 1\n", "version": 3_863_834_606})).status_code == 422
+
+
+async def test_a_nul_character_in_text_is_a_422_not_a_500(api):
+    """Postgres cannot store NUL; found by fuzzing the MCP registration endpoint."""
+    acct = await api.signup()
+    for r in (await acct.post("/v1/admin/agents", {"slug": "nul-agent", "name": "n", "owner": "o", "purpose": "a\u0000b"}),
+              await acct.post("/v1/admin/mcp-servers", {"name": "nul-srv", "owner": "o\u0000", "tools": [{"name": "t", "description": "x"}]}),
+              await acct.post("/v1/admin/mcp-servers", {"name": "nul-srv2", "owner": "o", "tools": [{"name": "t", "description": "bad \u0000 text", "inputSchema": {"x": "\u0000"}}]})):
+        assert r.status_code == 422, r.text
+        assert r.json()["code"] == "validation_failed"

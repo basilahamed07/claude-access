@@ -21,6 +21,7 @@ from .routes import (
     admin_alerts,
     admin_events,
     admin_incidents,
+    admin_mcp,
     admin_policies,
     admin_scan_rules,
     admin_sessions,
@@ -31,6 +32,7 @@ from .routes import (
     auth,
     check,
     health,
+    mcp_proxy,
     proxy,
     scan,
 )
@@ -80,6 +82,6 @@ def create_app(settings: Settings | None = None, tracer_provider: TracerProvider
     app.add_middleware(SecurityHeadersMiddleware, hsts=prod or settings.cookie_secure)
     setup_observability(app, settings, tracer_provider)
     install_error_handlers(app)
-    for module in (health, auth, check, scan, approvals, proxy, admin_events, admin_sessions, admin_incidents, admin_alerts, admin_agents, admin_policies, admin_scan_rules, admin_upstreams, admin_users, admin_settings):
+    for module in (health, auth, check, scan, approvals, proxy, admin_events, admin_sessions, admin_incidents, admin_alerts, admin_mcp, mcp_proxy, admin_agents, admin_policies, admin_scan_rules, admin_upstreams, admin_users, admin_settings):
         app.include_router(module.router)
     return app

@@ -46,6 +46,7 @@ class RecordedCall:
     risk: float
     approved: bool
     args_hash: str | None
+    server: str | None = None
 
 
 def _tool_from_summary(summary: str) -> str:
@@ -89,7 +90,7 @@ async def load_calls(conn: AsyncConnection, tenant_id: UUID, *, session_ids: lis
             effect_tag=(req_payload or payload or {}).get("effect_tag"), decision=recorded, rule_id=r["rule_id"],
             risk=float((payload or {}).get("risk_score") or 0.0),
             approved=bool((payload or {}).get("approved_by_human")),
-            args_hash=(req_payload or payload or {}).get("args_hash")))
+            args_hash=(req_payload or payload or {}).get("args_hash"), server=(req_payload or payload or {}).get("server")))
     return calls[:MAX_CALLS]
 
 
@@ -104,7 +105,7 @@ def replay_calls(policy: CompiledPolicy, calls: list[RecordedCall]) -> list[Repl
             continue
         tag = EffectTag(c.effect_tag) if c.effect_tag in {t.value for t in EffectTag} else None
         approved = frozenset({(c.tool, c.args_hash)}) if c.approved and c.args_hash else frozenset()
-        ev = evaluate(policy, c.tool, c.arguments, SessionState(c.risk, approved), advised_tag=tag)
+        ev = evaluate(policy, c.tool, c.arguments, SessionState(c.risk, approved), advised_tag=tag, server=c.server)
         step.replay_decision, step.replay_rule, step.replay_reason = ev.decision.value, ev.rule_id, ev.reason
         step.changed = step.replay_decision != c.decision
         steps.append(step)
