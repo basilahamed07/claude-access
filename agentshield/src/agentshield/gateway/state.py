@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from ..audit.emitter import Emitter
 from ..audit.spool import Spool
 from ..db.engine import create_engine
+from ..policy.approvals import ApprovalsService
 from ..policy.budgets import BudgetTracker
 from ..policy.cache import PolicyCache
 from ..policy.decide import PolicyEnforcer
@@ -31,6 +32,7 @@ class AppState:
     budgets: BudgetTracker
     policies: PolicyCache
     enforcer: PolicyEnforcer
+    approvals: ApprovalsService
     pepper: bytes
     master_key: bytes
     jwt_secret: str
@@ -45,6 +47,11 @@ async def init_state(app: FastAPI, settings: Settings) -> AppState:
     emitter = Emitter(redis, Spool(settings.spool_dir))
     policies = PolicyCache()
     enforcer = PolicyEnforcer(engine=engine, redis=redis, emitter=emitter, cache=policies)
+    approvals = ApprovalsService(engine=engine, redis=redis, emitter=emitter, http=http,
+                                 ttl_seconds=settings.approval_ttl_seconds,
+                                 allowance_seconds=settings.approval_allowance_seconds,
+                                 dashboard_url=settings.dashboard_url, allow_private=settings.private_hosts)
+    enforcer.approvals = approvals
     state = AppState(
         settings=settings,
         engine=engine,
@@ -53,6 +60,7 @@ async def init_state(app: FastAPI, settings: Settings) -> AppState:
         budgets=BudgetTracker(redis, default_rpm=settings.default_rpm),
         policies=policies,
         enforcer=enforcer,
+        approvals=approvals,
         http=http,
         upstream=UpstreamClient(http, allow_private=settings.private_hosts, max_bytes=settings.upstream_max_bytes),
         pepper=settings.pepper_bytes,

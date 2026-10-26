@@ -379,3 +379,25 @@ async def events_of(acct: Account, worker: AuditWorker, **params: str) -> list[d
 
 
 _ = _json
+
+
+@pytest_asyncio.fixture
+async def webhook(app: FastAPI) -> AsyncIterator[dict[str, Any]]:
+    """Capture webhook deliveries instead of sending them. `sink["fail"]=N` makes the first N deliveries fail."""
+    sink: dict[str, Any] = {"requests": [], "fail": 0, "status": 200}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if sink["fail"] > 0:
+            sink["fail"] -= 1
+            return httpx.Response(500)
+        sink["requests"].append((str(request.url), _json.loads(request.content)))
+        return httpx.Response(sink["status"])
+
+    state = app.state.s
+    original = state.approvals.http
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    state.approvals.http = client
+    yield sink
+    await state.approvals.drain_notifications()
+    state.approvals.http = original
+    await client.aclose()

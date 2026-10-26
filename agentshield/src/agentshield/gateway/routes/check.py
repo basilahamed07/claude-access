@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from ...contracts.check import CheckRequest, CheckResponse
+from ...contracts.decision import Decision
 from ...contracts.errors import ApiError
 from ...contracts.ids import new_trace_id
 from ...db.tenant_tx import tenant_tx
@@ -50,4 +51,13 @@ async def check(body: CheckRequest, request: Request, ctx: TenantContext = Depen
     resp = await state.enforcer.decide(
         ctx, AgentInfo.from_row(row), session, body.action.tool, body.action.arguments, trace_id=trace_id,
         source="check", advised_tag=body.action.effect_tag, budget_unavailable=unavailable)
+    if resp.decision is Decision.ask and resp.approval_id and body.wait_seconds > 0:
+        row = await state.approvals.wait(ctx.tenant_id, resp.approval_id, body.wait_seconds)
+        if row["status"] == "approved":
+            who = row.get("decided_by_email") or "a reviewer"
+            resp = resp.model_copy(update={"decision": Decision.allow, "reason": f"Approved by {who}"})
+        elif row["status"] in {"denied", "expired"}:
+            resp = resp.model_copy(update={"decision": Decision.block,
+                                           "reason": "Denied by a reviewer" if row["status"] == "denied"
+                                           else "No reviewer answered in time; treated as denied"})
     return JSONResponse(resp.model_dump(mode="json"), headers={"X-AgentShield-Trace": trace_id})

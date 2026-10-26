@@ -258,3 +258,34 @@ class PolicyVersionRead(Out):
     active: bool = False
     yaml: str | None = None
     parsed: dict[str, object] | None = None
+
+
+# ── approvals ───────────────────────────────────────────────────────────────────────────────────
+class ApprovalRead(Out):
+    id: UUID
+    agent_slug: str
+    session_id: UUID
+    trace_id: str
+    tool: str
+    args_redacted: dict[str, object]
+    rule_id: str
+    status: str
+    decided_by: UUID | None = None
+    decided_by_email: str | None = None
+    decided_at: datetime | None = None
+    note: str | None = None
+    expires_at: datetime
+    created_at: datetime
+
+
+class ApprovalDecision(In):
+    approve: bool
+    note: str | None = Field(default=None, max_length=500)
+
+
+class AgentApprovalRead(Out):
+    id: UUID
+    status: Literal["pending", "approved", "denied", "expired"]
+    decision: Literal["allow", "block", "ask"]
+    expires_at: datetime
+    decided_at: datetime | None = None

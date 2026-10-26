@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -18,6 +19,7 @@ from .routes import (
     admin_settings,
     admin_upstreams,
     admin_users,
+    approvals,
     auth,
     check,
     health,
@@ -32,9 +34,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         state = await init_state(app, settings)
+        sweeper = asyncio.create_task(state.approvals.sweep_forever(settings.approval_sweep_seconds))
         try:
             yield
         finally:
+            sweeper.cancel()
+            await asyncio.gather(sweeper, return_exceptions=True)
+            await state.approvals.drain_notifications()
             await close_state(state)
 
     prod = settings.env == "prod"
@@ -53,6 +59,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)
-    for module in (health, auth, check, proxy, admin_events, admin_agents, admin_policies, admin_upstreams, admin_users, admin_settings):
+    for module in (health, auth, check, approvals, proxy, admin_events, admin_agents, admin_policies, admin_upstreams, admin_users, admin_settings):
         app.include_router(module.router)
     return app

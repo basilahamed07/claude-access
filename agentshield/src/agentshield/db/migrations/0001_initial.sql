@@ -413,9 +413,9 @@ begin
   return tid;
 end $$;
 
-create or replace function private.tenants_with_due_approvals()
+create or replace function private.tenants_with_due_approvals(p_now timestamptz default now())
 returns table(tenant_id uuid) language sql security definer set search_path = '' stable as $$
-  select distinct a.tenant_id from public.approvals a where a.status = 'pending' and a.expires_at < now()
+  select distinct a.tenant_id from public.approvals a where a.status = 'pending' and a.expires_at < p_now
 $$;
 
 create or replace function private.tenants_with_audit_backlog()
@@ -459,6 +459,6 @@ grant select on all tables in schema public to agentshield_readonly;
 
 grant execute on function private.resolve_agent_key(text), private.resolve_login(citext),
   private.resolve_user_token(text), private.create_tenant(text, text, citext, text),
-  private.tenants_with_due_approvals() to agentshield_app;
+  private.tenants_with_due_approvals(timestamptz) to agentshield_app;
 grant execute on function private.tenants_with_audit_backlog() to agentshield_worker, agentshield_app;
 grant execute on function private.ensure_audit_partitions(int) to agentshield_owner;

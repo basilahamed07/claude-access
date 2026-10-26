@@ -35,6 +35,9 @@ class ApprovalService(Protocol):
     async def request(self, ctx: TenantContext, agent: dict[str, Any], session: SessionRef, tool: str,
                       arguments: Any, evaluation: Evaluation, trace_id: str) -> str | None: ...
 
+    async def prior_denial(self, ctx: TenantContext, session: SessionRef, tool: str,
+                           args_hash: str) -> dict[str, Any] | None: ...
+
 
 @dataclass
 class AgentInfo:
@@ -100,6 +103,16 @@ class PolicyEnforcer:
             would_have, decision, mode = decision, Decision.allow, "monitor"
             reason = f"[monitor mode: would have been {would_have.value}] {reason}"
         approval_id: str | None = None
+        if decision is Decision.ask and self.approvals is not None:
+            try:
+                prior = await self.approvals.prior_denial(ctx, session, tool, evaluation.args_hash)
+                if prior is not None:
+                    who = prior.get("decided_by_email") or "a reviewer"
+                    decision, reason = Decision.block, f"This exact action was denied by {who}"
+                    evaluation = Evaluation(Decision.block, "approval-denied", reason, evaluation.matched,
+                                            evaluation.effect_tag, evaluation.args_hash, evaluation.args_valid)
+            except Exception:                                         # noqa: BLE001
+                log.exception("could not look up earlier approvals")
         if decision is Decision.ask and self.approvals is not None:
             try:
                 approval_id = await self.approvals.request(
