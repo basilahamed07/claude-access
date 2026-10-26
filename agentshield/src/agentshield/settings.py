@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import logging
 from functools import lru_cache
 from typing import Literal
 
@@ -42,6 +45,33 @@ class Settings(BaseSettings):
     judge_timeout_seconds: float = 1.5
 
     spool_dir: str = "/tmp/agentshield-spool"  # noqa: S108
+
+    def _secret(self, value: str, name: str) -> str:
+        if value:
+            return value
+        if self.env == "prod":
+            raise RuntimeError(f"AGENTSHIELD_{name.upper()} must be set when AGENTSHIELD_ENV=prod")
+        logging.getLogger("agentshield").warning("using an insecure development default for %s", name)
+        return f"dev-insecure-{name}-{'x' * 32}"
+
+    @property
+    def master_key_bytes(self) -> bytes:
+        if self.master_key:
+            return self.master_key.encode()
+        self._secret("", "master_key")
+        return base64.urlsafe_b64encode(hashlib.sha256(b"dev-insecure-master-key").digest())
+
+    @property
+    def pepper_bytes(self) -> bytes:
+        return self._secret(self.key_pepper, "key_pepper").encode()
+
+    @property
+    def jwt_secret_value(self) -> str:
+        return self._secret(self.jwt_secret, "jwt_secret")
+
+    @property
+    def session_secret_value(self) -> str:
+        return self._secret(self.session_secret, "session_secret")
 
     @property
     def private_hosts(self) -> set[str]:

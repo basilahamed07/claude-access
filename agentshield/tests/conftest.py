@@ -167,3 +167,128 @@ async def two_tenants(owner_conn: asyncpg.Connection) -> tuple[dict[str, Any], d
     a = await seed_tenant(owner_conn, f"alpha-{suffix}")
     b = await seed_tenant(owner_conn, f"bravo-{suffix}")
     return a, b
+
+
+# ── API harness ─────────────────────────────────────────────────────────────────────────────────
+import httpx  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+from fastapi.routing import APIRoute  # noqa: E402
+
+from agentshield.gateway.app import create_app  # noqa: E402
+from agentshield.settings import Settings  # noqa: E402
+from agentshield.tenants import urls as _urls  # noqa: E402
+from agentshield.tenants.crypto import generate_master_key  # noqa: E402
+
+PUBLIC_IP = "93.184.216.34"
+
+
+def api_routes(app: FastAPI) -> list[APIRoute]:
+    out: list[APIRoute] = []
+    for r in app.routes:
+        original = getattr(r, "original_router", None)
+        if original is not None:
+            out.extend(x for x in original.routes if isinstance(x, APIRoute))
+        elif isinstance(r, APIRoute):
+            out.append(r)
+    return out
+
+
+def make_settings(db_urls: DbUrls, **over: Any) -> Settings:
+    base: dict[str, Any] = dict(
+        env="test", database_url=db_urls.app, owner_database_url=db_urls.owner,
+        redis_url=REDIS_URL or "", master_key=generate_master_key(), key_pepper="p" * 40,
+        jwt_secret="j" * 40, session_secret="s" * 40, cookie_secure=False, signup="open",
+    )
+    base.update(over)
+    return Settings(**base)
+
+
+@pytest_asyncio.fixture(scope="session")
+async def app(db_urls: DbUrls) -> AsyncIterator[FastAPI]:
+    application = create_app(make_settings(db_urls))
+    async with application.router.lifespan_context(application):
+        yield application
+
+
+class Account:
+    def __init__(self, client: httpx.AsyncClient, tenant_id: str, email: str, csrf: str, slug: str) -> None:
+        self.client, self.tenant_id, self.email, self.csrf, self.slug = client, tenant_id, email, csrf, slug
+
+    @property
+    def h(self) -> dict[str, str]:
+        return {"X-CSRF-Token": self.csrf}
+
+    async def post(self, url: str, json: Any = None, **kw: Any) -> httpx.Response:
+        return await self.client.post(url, json=json, headers={**self.h, **kw.pop("headers", {})}, **kw)
+
+    async def patch(self, url: str, json: Any = None, **kw: Any) -> httpx.Response:
+        return await self.client.patch(url, json=json, headers={**self.h, **kw.pop("headers", {})}, **kw)
+
+    async def delete(self, url: str, **kw: Any) -> httpx.Response:
+        return await self.client.delete(url, headers={**self.h, **kw.pop("headers", {})}, **kw)
+
+    async def get(self, url: str, **kw: Any) -> httpx.Response:
+        return await self.client.get(url, **kw)
+
+    async def make_agent(self, slug: str = "email-reader-01", **over: Any) -> dict[str, Any]:
+        body = {"slug": slug, "name": "Email reader", "owner": "ops@example.com", "risk_tier": "medium", **over}
+        r = await self.post("/v1/admin/agents", body)
+        assert r.status_code == 201, r.text
+        return r.json()
+
+    async def make_key(self, slug: str = "email-reader-01") -> dict[str, Any]:
+        r = await self.post(f"/v1/admin/agents/{slug}/keys")
+        assert r.status_code == 201, r.text
+        return r.json()
+
+    async def make_upstream(self, name: str = "main", **over: Any) -> dict[str, Any]:
+        body = {"name": name, "kind": "openai", "base_url": "https://api.openai.com/v1", "api_key": "sk-test-123",
+                **over}
+        r = await self.post("/v1/admin/upstreams", body)
+        assert r.status_code == 201, r.text
+        return r.json()
+
+
+class Api:
+    def __init__(self, app: FastAPI, redis_client: Any) -> None:
+        self.app = app
+        self.redis = redis_client
+        self._clients: list[httpx.AsyncClient] = []
+
+    def client(self, **kw: Any) -> httpx.AsyncClient:
+        c = httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app), base_url="http://test", **kw)
+        self._clients.append(c)
+        return c
+
+    async def signup(self, name: str | None = None, password: str = "correct-horse-battery") -> Account:
+        tag = secrets.token_hex(3)
+        name = name or f"Acme {tag}"
+        email = f"admin-{tag}@example.com"
+        c = self.client()
+        r = await c.post("/v1/signup", json={"tenant_name": name, "email": email, "password": password})
+        assert r.status_code == 201, r.text
+        slug = r.json()["slug"]
+        r = await c.post("/v1/auth/login", json={"email": email, "password": password})
+        assert r.status_code == 200, r.text
+        return Account(c, r.json()["tenant_id"], email, r.json()["csrf_token"], slug)
+
+    async def add_user(self, admin: Account, role: str, password: str = "correct-horse-battery") -> Account:
+        email = f"{role}-{secrets.token_hex(3)}@example.com"
+        r = await admin.post("/v1/admin/users", {"email": email, "password": password, "role": role})
+        assert r.status_code == 201, r.text
+        c = self.client()
+        r = await c.post("/v1/auth/login", json={"email": email, "password": password})
+        assert r.status_code == 200, r.text
+        return Account(c, r.json()["tenant_id"], email, r.json()["csrf_token"], admin.slug)
+
+    async def aclose(self) -> None:
+        for c in self._clients:
+            await c.aclose()
+
+
+@pytest_asyncio.fixture
+async def api(app: FastAPI, redis_client: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Api]:
+    monkeypatch.setattr(_urls, "_default_resolver", lambda host, port: [PUBLIC_IP])
+    helper = Api(app, redis_client)
+    yield helper
+    await helper.aclose()

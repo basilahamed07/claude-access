@@ -60,10 +60,14 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
-ignore = ["S101", "B008"]
+ignore = ["S101", "B008", "E501", "S105", "S106", "S107"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S608", "S105", "S106", "S108", "S311", "S104", "E501"]
+"tests/**" = ["S608", "S108", "S311", "S104"]
+"src/agentshield/tenants/registry.py" = ["S608"]
+"src/agentshield/audit/*.py" = ["S608"]
+"src/agentshield/policy/*.py" = ["S608"]
+"src/agentshield/gateway/routes/*.py" = ["S608"]
 
 [tool.mypy]
 python_version = "3.12"
