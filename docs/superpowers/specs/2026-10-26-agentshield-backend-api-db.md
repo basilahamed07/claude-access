@@ -402,6 +402,7 @@ create table audit_events (
   tenant_id         uuid not null,
   seq               bigint not null,
   ts                timestamptz not null,
+  schema            text not null default 'agentshield.event/1',
   id                text not null,
   trace_id          text not null,
   session_id        uuid,

@@ -280,9 +280,9 @@ Admin API (authoritative list in backend spec §A.3): `/v1/admin/agents`, `/v1/a
 - *Event schema* (§4.2): one envelope shared by all modules.
 - *Redactor*: runs **before publish**. Patterns for API keys (`sk-…`, `AKIA…`, `ghp_…`, bearer tokens), emails, phone numbers, card numbers (Luhn), and any `Authorization` value. Replaces with `[REDACTED:<kind>:<sha8>]`; per-tenant extra patterns later.
 - *Emitter*: non-blocking `emit(event)`; XADD to Redis stream `audit.events`; if Redis is down, spool to a bounded in-memory/disk queue and flag the gap with a `audit.gap` event.
-- *Audit worker*: the **only writer** to Postgres `audit_events`; computes `prev_hash` and `hash = sha256(prev_hash || canonical_json(envelope) || payload_sha256)` **per tenant**, in `seq` order (§4.2).
+- *Audit worker*: the **only writer** to Postgres `audit_events`; computes `prev_hash` and `hash = sha256(prev_hash || canonical_json(envelope_without_prev_hash_and_hash))` **per tenant**, in `seq` order (§4.2).
 - *Replay engine*: rebuilds a session from stored events. **Replay shows what was recorded, not a fresh model run.** An optional "re-evaluate" mode re-runs M1 (and M2 rules) on the recorded inputs against a chosen policy version; this is also the **policy simulator**.
-- *Search/report*: filters (agent, session, tool, decision, time, severity); JSON export and a PDF later.
+- *Search/report*: filters (agent, session, end user, tool, decision, time, severity); JSON export and a PDF later.
 
 **Retention (decided, see §7.4):** three tiers, configurable per tenant within limits:
 | Data | Default | Floor | Why |
@@ -354,7 +354,7 @@ Design rules (from the `supabase-postgres-best-practices` skill, applied in the 
 - `audit_events` is **range-partitioned by month** on `ts` (cheap retention by dropping partitions), append-only by trigger and by grants.
 - Least-privilege roles: `agentshield_owner` (migrations), `agentshield_app` (gateway), `agentshield_worker` (only INSERT on `audit_events`), `agentshield_retention` (drops partitions, purges payloads), `agentshield_readonly`.
 
-Tables: `tenants`, `users`, `upstreams`, `agents` (with `slug` unique per tenant), `agent_keys`, `policy_versions`, `sessions`, `approvals`, `budget_counters`, `incidents`, `audit_events`, `audit_payloads` (payload bodies split out so they can be purged on a shorter schedule), `scan_rule_sets`, and the later-stage `mcp_servers`, `ai_tools_seen`.
+Tables: `tenants`, `users`, `upstreams`, `agents` (with `slug` unique per tenant), `agent_keys`, `policy_versions`, `sessions`, `approvals`, `budget_counters`, `incidents`, `user_tokens`, `audit_events`, `audit_payloads` (payload bodies split out so they can be purged on a shorter schedule), `audit_chain_heads`, `audit_events_archive`, `audit_payloads_archive`, `scan_rule_sets`, and the later-stage `mcp_servers`, `ai_tools_seen`.
 - Agent key format `ask_live_<32 url-safe random chars>`; stored as `HMAC-SHA256(server_pepper, key)`; `prefix` = first 12 chars for display.
 
 ### 4.2 Event schema (v1) — shared by all modules
@@ -537,7 +537,7 @@ OpenTelemetry traces with `trace_id` as the root; Prometheus metrics (`decisions
 ### 8.4 Platform security (it is a target)
 **Encryption:** in transit, TLS terminates at the gateway (Compose ships a Caddy/nginx TLS front); mTLS between internal services is a **post-v1** item ⚠️. At rest, v1 relies on encrypted volumes/disks for Postgres and Redis (documented requirement in the deploy guide) plus field-level Fernet for provider keys and redaction of everything else before storage; Postgres-level column encryption of audit payloads and Vault-managed keys are **post-v1** ⚠️.
 
-v1 also uses v1 uses a private network, least-privilege DB roles (gateway cannot UPDATE/DELETE audit), rate limiting on the check API (per key), request size limits (default 2 MB), dashboard behind login with roles, CSRF-safe cookie settings, no wildcard CORS.
+v1 also uses a private network, least-privilege DB roles (gateway cannot UPDATE/DELETE audit), rate limiting on the check API (per key), request size limits (default 2 MB), dashboard behind login with roles, CSRF-safe cookie settings, no wildcard CORS.
 
 ### 8.5 Streaming rewrite correctness
 Anthropic SSE: `content_block_start(type=tool_use)` … `input_json_delta`* … `content_block_stop`; buffer from start to stop, evaluate with the assembled JSON, then replay or replace with a synthetic `text` block (renumbering block indexes). OpenAI: accumulate `delta.tool_calls[i]` by index; same logic. Message-level fields (`stop_reason`, `usage`) are patched in `message_delta`/final chunk.
