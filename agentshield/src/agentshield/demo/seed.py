@@ -62,7 +62,8 @@ async def seed_demo(settings: Settings, *, password: str | None = None) -> SeedR
                                              "p": hash_password(password)})).scalar_one()
         sessions = await _create_agent_and_sessions(engine, tid)
         emitter = Emitter(redis, Spool(settings.spool_dir))
-        await _emit_story(emitter, tid, sessions)
+        pay_trace = await _emit_story(emitter, tid, sessions)
+        await _hold_payment(engine, tid, sessions["payment"], pay_trace)
         worker = AuditWorker(engine, redis)
         while await worker.process_once():
             pass
@@ -93,7 +94,7 @@ async def _create_agent_and_sessions(engine: Any, tid: UUID) -> dict[str, UUID]:
         return out
 
 
-async def _emit_story(emitter: Emitter, tid: UUID, sessions: dict[str, UUID]) -> None:
+async def _emit_story(emitter: Emitter, tid: UUID, sessions: dict[str, UUID]) -> str:
     clock = datetime.now(UTC) - timedelta(hours=3)
 
     async def ev(session: str, trace: str, module: Module, etype: EventType, summary: str, payload: dict[str, Any], *,
@@ -140,3 +141,14 @@ async def _emit_story(emitter: Emitter, tid: UUID, sessions: dict[str, UUID]) ->
     await call("payment", t4, "pay_invoice", "financial", {"vendor": "Initech", "amount": 5000})
     await decide("payment", t4, "pay_invoice", "financial", Decision.ask, "ask-large-payment",
                  "Payments above $1,000 need approval", 0.0)
+    return t4
+
+
+async def _hold_payment(engine: Any, tid: UUID, session_id: UUID, trace_id: str) -> None:
+    """The held payment waits in the approval queue. Unlike live approvals it stays for a week, so the demo is not empty by tomorrow."""
+    async with tenant_tx(engine, tid) as conn:
+        agent_id = (await conn.execute(text("select id from agents where tenant_id = :t and slug = :s"), {"t": tid, "s": AGENT})).scalar_one()
+        await conn.execute(text(
+            "insert into approvals (tenant_id, agent_id, session_id, trace_id, tool, args_hash, args_redacted, rule_id, expires_at) "
+            "values (:t, :a, :s, :tr, 'pay_invoice', 'demo-hash', cast(:args as jsonb), 'ask-large-payment', now() + interval '7 days')"),
+            {"t": tid, "a": agent_id, "s": session_id, "tr": trace_id, "args": '{"vendor": "Initech", "amount": 5000}'})

@@ -1,9 +1,20 @@
 import { yaml } from "@codemirror/lang-yaml";
 import { type Diagnostic, lintGutter, setDiagnostics } from "@codemirror/lint";
 import { EditorState } from "@codemirror/state";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
+import { tags as t } from "@lezer/highlight";
 import { basicSetup } from "codemirror";
 import { useEffect, useRef } from "react";
+
+// Token colours come from the design tokens so both themes keep 4.5:1 contrast.
+const highlight = HighlightStyle.define([
+  { tag: [t.comment, t.lineComment], color: "var(--ink-soft)", fontStyle: "italic" },
+  { tag: [t.propertyName, t.definition(t.propertyName), t.keyword], color: "var(--ink)", fontWeight: "600" },
+  { tag: [t.string, t.content, t.character], color: "var(--cleared)" },
+  { tag: [t.number, t.bool, t.null, t.atom], color: "var(--holding)" },
+  { tag: [t.punctuation, t.separator, t.brace, t.squareBracket, t.meta, t.operator], color: "var(--ink-soft)" },
+]);
 
 export interface LineMarker { line: number; message: string }
 
@@ -23,10 +34,10 @@ export function YamlEditor({ value, onChange, markers, label, readOnly = false }
       state: EditorState.create({
         doc: value,
         extensions: [
-          basicSetup, yaml(), lintGutter(), EditorView.lineWrapping, EditorState.readOnly.of(readOnly),
+          basicSetup, syntaxHighlighting(highlight), yaml(), lintGutter(), EditorView.lineWrapping, EditorState.readOnly.of(readOnly),
           EditorView.contentAttributes.of({ "aria-label": label, "aria-multiline": "true" }),
           EditorView.updateListener.of((u) => { if (u.docChanged) change.current(u.state.doc.toString()); }),
-          EditorView.theme({ "&": { backgroundColor: "var(--panel)", color: "var(--ink)", fontSize: "0.875rem", maxHeight: "32rem" },
+          EditorView.theme({ "&": { backgroundColor: "var(--panel)", color: "var(--ink)", fontSize: "0.875rem" },
             ".cm-scroller": { fontFamily: "var(--font-mono)", overflow: "auto" }, ".cm-gutters": { backgroundColor: "var(--panel-sunk)", color: "var(--ink-soft)", border: "none" },
             "&.cm-focused": { outline: "2px solid var(--recorder)", outlineOffset: "2px" }, ".cm-activeLine": { backgroundColor: "transparent" } }),
         ],
