@@ -205,6 +205,7 @@ class Retention(In):
 
 class TenantSettings(In):
     on_malicious: Literal["sanitize", "quarantine", "flag"] = "sanitize"
+    mark_untrusted: bool = True
     webhook_url: str | None = Field(default=None, max_length=500)
     retention: Retention = Field(default_factory=Retention)
     judge_upstream_id: UUID | None = None
@@ -217,6 +218,7 @@ class TenantSettings(In):
 
 class TenantSettingsPatch(In):
     on_malicious: Literal["sanitize", "quarantine", "flag"] | None = None
+    mark_untrusted: bool | None = None
     webhook_url: str | None = None
     retention: Retention | None = None
     judge_upstream_id: UUID | None = None

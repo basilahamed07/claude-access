@@ -50,6 +50,7 @@ async def put_rules(body: ScanRulesPut, request: Request, ctx: TenantContext = D
             "(select coalesce(max(version), 0) + 1 from scan_rule_sets where tenant_id = :t), :y, :h, true)"),
             {"t": ctx.tenant_id, "y": body.yaml, "h": hashlib.sha256(body.yaml.encode()).digest()})
     state.rules.invalidate(ctx.tenant_id)
+    state.scanner.invalidate(ctx.tenant_id)
     return await _effective(request, ctx)
 
 
@@ -60,6 +61,7 @@ async def reset_rules(request: Request, ctx: TenantContext = Depends(user_ctx("a
         await conn.execute(text("update scan_rule_sets set active = false where tenant_id = :t and active"),
                            {"t": ctx.tenant_id})
     state.rules.invalidate(ctx.tenant_id)
+    state.scanner.invalidate(ctx.tenant_id)
     return await _effective(request, ctx)
 
 

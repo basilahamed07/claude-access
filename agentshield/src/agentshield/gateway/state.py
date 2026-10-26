@@ -19,6 +19,7 @@ from ..policy.decide import PolicyEnforcer
 from ..proxy.pipeline import JudgeFactory
 from ..proxy.upstream import UpstreamClient
 from ..scan.classifier import ClassifierHandle, load_classifier
+from ..scan.pipeline import ScanService
 from ..scan.rules import RuleStore
 from ..settings import Settings
 
@@ -37,6 +38,7 @@ class AppState:
     approvals: ApprovalsService
     rules: RuleStore
     classifier: ClassifierHandle
+    scanner: ScanService
     pepper: bytes
     master_key: bytes
     jwt_secret: str
@@ -56,6 +58,12 @@ async def init_state(app: FastAPI, settings: Settings) -> AppState:
                                  allowance_seconds=settings.approval_allowance_seconds,
                                  dashboard_url=settings.dashboard_url, allow_private=settings.private_hosts)
     enforcer.approvals = approvals
+    rules = RuleStore(refresh_seconds=settings.rules_refresh_seconds)
+    classifier = load_classifier(settings.classifier, settings.classifier_dir)
+    upstream_client = UpstreamClient(http, allow_private=settings.private_hosts, max_bytes=settings.upstream_max_bytes)
+    scanner = ScanService(engine=engine, redis=redis, emitter=emitter, rules=rules, classifier=classifier,
+                          upstream=upstream_client, master_key=settings.master_key_bytes,
+                          judge_timeout=settings.judge_timeout_seconds)
     state = AppState(
         settings=settings,
         engine=engine,
@@ -65,10 +73,11 @@ async def init_state(app: FastAPI, settings: Settings) -> AppState:
         policies=policies,
         enforcer=enforcer,
         approvals=approvals,
-        rules=RuleStore(refresh_seconds=settings.rules_refresh_seconds),
-        classifier=load_classifier(settings.classifier, settings.classifier_dir),
+        rules=rules,
+        classifier=classifier,
+        scanner=scanner,
         http=http,
-        upstream=UpstreamClient(http, allow_private=settings.private_hosts, max_bytes=settings.upstream_max_bytes),
+        upstream=upstream_client,
         pepper=settings.pepper_bytes,
         master_key=settings.master_key_bytes,
         jwt_secret=settings.jwt_secret_value,

@@ -16,16 +16,17 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ..audit.emitter import Emitter
 from ..audit.events import make_event
-from ..contracts.check import CheckResponse
+from ..contracts.check import CheckResponse, Finding
 from ..contracts.decision import FAIL_OPEN_TAGS, Decision, EffectTag
 from ..contracts.events import EventType, Severity
 from ..proxy.pipeline import JudgeFactory, ProxyCall
 from ..proxy.sessions import SessionRef
 from ..proxy.tools import ALLOW, Replace, ToolCall, ToolJudge, ToolJudgement
+from ..scan.action_check import ACTION_RISK, ActionCheck, action_in_scope, policy_domains
 from ..tenants.context import TenantContext
 from .cache import PolicyCache
 from .evaluator import EVALUATOR_ERROR, Evaluation, SessionState, evaluate
-from .session_state import get_risk, is_approved
+from .session_state import accumulate_risk, get_risk, is_approved
 
 log = logging.getLogger("agentshield.policy")
 HIGH_IMPACT = {EffectTag.external, EffectTag.financial, EffectTag.destructive, EffectTag.execute}
@@ -53,6 +54,11 @@ class AgentInfo:
                    active_policy_version=row.get("active_policy_version"), risk_tier=row.get("risk_tier", "medium"))
 
 
+def _action_finding(check: ActionCheck) -> Finding:
+    return Finding(module="action_check", rule_id="action-out-of-scope", span=None, detail=check.reason,
+                   destinations=check.unexpected)
+
+
 def block_text(resp: CheckResponse) -> str:
     return f"Action blocked by AgentShield: {resp.reason} (rule {resp.rule_id}, trace {resp.trace_id})"
 
@@ -73,9 +79,15 @@ class PolicyEnforcer:
         risk = session.risk_score
         evaluation: Evaluation | None = None
         failure: str | None = None
+        findings: list[Finding] = []
         try:
             policy = await self.cache.get(self.engine, ctx.tenant_id, agent.id, agent.active_policy_version)
             risk = await get_risk(self.redis, ctx.tenant_id, session.id, session.risk_score)
+            check = action_in_scope(session.user_request, tool, arguments if isinstance(arguments, dict) else None,
+                                    policy_domains(policy))
+            if not check.ok:                        # the call went somewhere the user never asked for
+                risk = await accumulate_risk(self.redis, ctx.tenant_id, session.id, ACTION_RISK)
+                findings.append(_action_finding(check))
             from .evaluator import args_hash
             digest = args_hash(arguments)
             approved = frozenset({(tool, digest)}) if await is_approved(self.redis, ctx.tenant_id, session.id, tool, digest) \
@@ -123,7 +135,8 @@ class PolicyEnforcer:
                 evaluation = Evaluation(Decision.block, "approval-service-unavailable", reason, evaluation.matched,
                                         evaluation.effect_tag, evaluation.args_hash, evaluation.args_valid)
         resp = CheckResponse(decision=decision, reason=reason, rule_id=evaluation.rule_id, risk_score=min(max(risk, 0.0), 1.0),
-                             approval_id=approval_id, mode=mode, would_have=would_have, trace_id=trace_id)
+                             approval_id=approval_id, mode=mode, would_have=would_have, trace_id=trace_id,
+                             findings=findings)
         await self._audit(ctx, session, tool, arguments, evaluation, resp, source, failure)
         return resp
 

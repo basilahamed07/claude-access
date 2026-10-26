@@ -25,6 +25,7 @@ from .routes import (
     check,
     health,
     proxy,
+    scan,
 )
 from .state import close_state, init_state
 
@@ -60,6 +61,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)
-    for module in (health, auth, check, approvals, proxy, admin_events, admin_agents, admin_policies, admin_scan_rules, admin_upstreams, admin_users, admin_settings):
+    for module in (health, auth, check, scan, approvals, proxy, admin_events, admin_agents, admin_policies, admin_scan_rules, admin_upstreams, admin_users, admin_settings):
         app.include_router(module.router)
     return app

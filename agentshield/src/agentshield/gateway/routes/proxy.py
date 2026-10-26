@@ -20,6 +20,7 @@ from ...contracts.ids import new_trace_id
 from ...db.tenant_tx import tenant_tx
 from ...policy.budgets import BudgetStatus, BudgetUnavailable, price_micro_usd
 from ...proxy.anthropic_stream import rewrite_anthropic, rewrite_anthropic_message
+from ...proxy.guard import guard_request
 from ...proxy.openai_stream import rewrite_openai, rewrite_openai_message
 from ...proxy.pipeline import ProxyCall
 from ...proxy.sessions import SESSION_HEADER, USER_HEADER, first_user_message, session_key, upsert_session
@@ -135,6 +136,8 @@ async def handle_proxy(request: Request, ctx: TenantContext, api: Api) -> Respon
         raise ApiError(code, admitted.message(), headers={"Retry-After": str(admitted.retry_after)})
     limit_headers = _limit_headers(admitted)
     out_body = {**body, "model": upstream_model}
+    if untrusted_parts:                                            # scan tool results before the model sees them
+        out_body, _scan_results = await guard_request(state, ctx, session, trace_id, api, out_body, untrusted_parts)
     request.state.session = session
     trace_header = {"X-AgentShield-Trace": trace_id, "X-AgentShield-Session": session.key}
     await state.emitter.emit(

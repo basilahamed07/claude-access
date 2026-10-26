@@ -42,7 +42,10 @@ async def test_prompt_section9_example_is_blocked_with_the_documented_response(b
     assert body["reason"] == "External email is not permitted for this agent"
     assert body["trace_id"].startswith("t-") and r.headers["x-agentshield-trace"] == body["trace_id"]
     assert body["mode"] == "enforce" and body["would_have"] is None and body["approval_id"] is None
-    assert 0 <= body["risk_score"] <= 1 and body["findings"] == []
+    assert 0 <= body["risk_score"] <= 1
+    # the user asked for a summary, not for mail to unknown.com: the action check notes that the call went somewhere new
+    assert [f["module"] for f in body["findings"]] == ["action_check"] and body["findings"][0]["destinations"] == ["unknown.com"]
+    assert body["risk_score"] == 0.2
     assert set(body) >= {"decision", "reason", "rule_id", "risk_score", "findings", "trace_id"}
 
 
@@ -177,7 +180,7 @@ async def test_check_decisions_are_audited_with_session_and_user(bot, worker):
     body["context"]["end_user"] = "u-1234"
     r = await api.client().post("/v1/check", json=body, headers=auth)
     events = await events_of(acct, worker, trace=r.json()["trace_id"])
-    assert {e["type"] for e in events} == {"tool.requested", "policy.decision"}
+    assert {e["type"] for e in events} == {"content.scanned", "tool.requested", "policy.decision"}
     dec = next(e for e in events if e["type"] == "policy.decision")
     assert dec["end_user"] == "u-1234" and dec["agent_slug"] == "email-reader-01" and dec["payload"]["source"] == "check"
     assert dec["session_id"] is not None

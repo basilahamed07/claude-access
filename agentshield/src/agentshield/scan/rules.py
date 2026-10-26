@@ -22,7 +22,7 @@ REGEX_TIMEOUT = 0.05
 MAX_HITS_PER_RULE = 5
 HIDDEN_BOOST = 0.1
 CONTEXT_DISCOUNT = 0.5
-SCAN_LIMIT = 200_000
+SCAN_LIMIT = 400_000       # the normalizer already bounds its output (~200 KB); never cut off the tail of it
 _QUOTES = "\"'“”‘’«»`"
 _CONTEXT = regex.compile(
     r"(?i)\b(?:for example|for instance|e\.g\.|such as|example|attackers?|phishing|social engineering|prompt injection|"

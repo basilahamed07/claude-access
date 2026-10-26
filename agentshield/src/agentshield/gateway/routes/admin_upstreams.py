@@ -79,7 +79,9 @@ async def update_upstream(upstream_id: UUID, body: UpstreamUpdate, request: Requ
     if "model_map" in fields and fields["model_map"] is not None:
         fields["model_map"] = {k: (v if isinstance(v, dict) else v.model_dump()) for k, v in fields["model_map"].items()}
     async with tenant_tx(state.engine, ctx.tenant_id) as conn:
-        return _read(await registry.update_upstream(conn, upstream_id, fields))
+        result = _read(await registry.update_upstream(conn, upstream_id, fields))
+    state.scanner.invalidate(ctx.tenant_id)
+    return result
 
 
 @router.delete("/{upstream_id}", status_code=204)
@@ -87,6 +89,7 @@ async def delete_upstream(upstream_id: UUID, request: Request,
                           ctx: TenantContext = Depends(user_ctx("admin"))) -> Response:
     async with tenant_tx(get_state(request).engine, ctx.tenant_id) as conn:
         await registry.delete_upstream(conn, upstream_id)
+    get_state(request).scanner.invalidate(ctx.tenant_id)
     return Response(status_code=204)
 
 

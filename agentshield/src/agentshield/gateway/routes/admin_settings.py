@@ -53,5 +53,6 @@ async def patch_settings(body: TenantSettingsPatch, request: Request, response: 
         out = result.model_dump(mode="json")
         await registry.update_tenant_settings(conn, out)
         row["settings"] = out
+    state.scanner.invalidate(ctx.tenant_id)
     response.headers["ETag"] = _etag(row)
     return result

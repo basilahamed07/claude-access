@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from ...contracts.check import CheckRequest, CheckResponse
+from ...contracts.check import CheckRequest, CheckResponse, Finding
 from ...contracts.decision import Decision
 from ...contracts.errors import ApiError
 from ...contracts.ids import new_trace_id
@@ -48,9 +48,17 @@ async def check(body: CheckRequest, request: Request, ctx: TenantContext = Depen
             raise ApiError("forbidden", "Agent is suspended or no longer exists")
         session = await upsert_session(conn, ctx.tenant_id, ctx.actor_id, body.session_id,
                                        body.context.user_request, body.context.end_user)
+    findings: list[Finding] = []
+    for item in body.context.untrusted_inputs[:10]:
+        scanned = await state.scanner.scan_content(ctx, trace_id=trace_id, session=session, source=item.source,
+                                                   content_id=item.id, text_=item.text)
+        for f in scanned.findings[:10]:
+            findings.append(Finding(module="injection" if f.layer != "judge" else "judge", rule_id=f.rule_id,
+                                    span=f"{item.id}:{f.span[0]}-{f.span[1]}" if f.span else item.id))
     resp = await state.enforcer.decide(
         ctx, AgentInfo.from_row(row), session, body.action.tool, body.action.arguments, trace_id=trace_id,
         source="check", advised_tag=body.action.effect_tag, budget_unavailable=unavailable)
+    resp = resp.model_copy(update={"findings": [*findings, *resp.findings]})
     if resp.decision is Decision.ask and resp.approval_id and body.wait_seconds > 0:
         row = await state.approvals.wait(ctx.tenant_id, resp.approval_id, body.wait_seconds)
         if row["status"] == "approved":
