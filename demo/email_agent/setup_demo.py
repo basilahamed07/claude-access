@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import secrets
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,18 +18,32 @@ import httpx
 
 HERE = Path(__file__).resolve().parent
 EMAIL = os.environ.get("DEMO_ADMIN_EMAIL", "demo-admin@example.com")
-PASSWORD = os.environ.get("DEMO_ADMIN_PASSWORD", "demo-admin-password-123")
 AGENT = "email-reader-01"
+SECRET_FILE = HERE / ".demo-admin-password"
 
 
-def setup(gateway: str, upstream_url: str, *, client: httpx.Client | None = None) -> dict[str, str]:
+def admin_password() -> str:
+    """No built-in password: use DEMO_ADMIN_PASSWORD, else the one generated on the first run (kept in a 0600 file), else make one."""
+    if os.environ.get("DEMO_ADMIN_PASSWORD"):
+        return os.environ["DEMO_ADMIN_PASSWORD"]
+    if SECRET_FILE.exists():
+        return SECRET_FILE.read_text(encoding="utf-8").strip()
+    pw = secrets.token_urlsafe(18)
+    fd = os.open(SECRET_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(pw + "\n")
+    return pw
+
+
+def setup(gateway: str, upstream_url: str, *, client: httpx.Client | None = None, password: str | None = None) -> dict[str, str]:
+    password = password or admin_password()
     http = client or httpx.Client(base_url=gateway, timeout=30)
-    r = http.post("/v1/signup", json={"tenant_name": "Demo Runner", "email": EMAIL, "password": PASSWORD})
+    r = http.post("/v1/signup", json={"tenant_name": "Demo Runner", "email": EMAIL, "password": password})
     if r.status_code not in (201, 409, 422):
         r.raise_for_status()
-    login = http.post("/v1/auth/login", json={"email": EMAIL, "password": PASSWORD})
+    login = http.post("/v1/auth/login", json={"email": EMAIL, "password": password})
     if login.status_code != 200:
-        raise SystemExit(f"Could not sign in as {EMAIL} ({login.status_code}): {login.json().get('detail')}")
+        raise SystemExit(f"Could not sign in as {EMAIL} ({login.status_code}). If the demo tenant was made with another password, set DEMO_ADMIN_PASSWORD.")
     h = {"X-CSRF-Token": login.json()["csrf_token"]}
 
     def call(method: str, path: str, **kw: Any) -> httpx.Response:
@@ -58,7 +73,7 @@ def setup(gateway: str, upstream_url: str, *, client: httpx.Client | None = None
     if settings.json().get("on_malicious") != "flag":
         call("PATCH", "/v1/admin/settings", headers={"If-Match": settings.headers["etag"]}, json={"on_malicious": "flag"}).raise_for_status()
     key = call("POST", f"/v1/admin/agents/{AGENT}/keys", json={}).raise_for_status().json()["key"]
-    return {"DEMO_PROTECTED_BASE_URL": f"{gateway.rstrip('/')}/v1", "DEMO_PROTECTED_API_KEY": key, "DASHBOARD_LOGIN": EMAIL, "DASHBOARD_PASSWORD": PASSWORD}
+    return {"DEMO_PROTECTED_BASE_URL": f"{gateway.rstrip('/')}/v1", "DEMO_PROTECTED_API_KEY": key, "DASHBOARD_LOGIN": EMAIL, "DASHBOARD_PASSWORD": password}
 
 
 def main() -> int:
@@ -68,8 +83,12 @@ def main() -> int:
     ap.add_argument("--dashboard", default=os.environ.get("DEMO_DASHBOARD", "http://127.0.0.1:5173"))
     a = ap.parse_args()
     out = setup(a.gateway, a.upstream)
-    (HERE / ".env.protected").write_text("".join(f"{k}={v}\n" for k, v in out.items() if k.startswith("DEMO_")), encoding="utf-8")
-    print(f"Demo ready. Dashboard {a.dashboard}  login {out['DASHBOARD_LOGIN']} / {out['DASHBOARD_PASSWORD']}")
+    target = HERE / ".env.protected"
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write("".join(f"{k}={v}\n" for k, v in out.items() if k.startswith("DEMO_")))
+    os.chmod(target, 0o600)
+    print(f"Demo ready. Dashboard {a.dashboard}\n  login:    {out['DASHBOARD_LOGIN']}\n  password: {out['DASHBOARD_PASSWORD']}   (generated; kept in {SECRET_FILE.name}, mode 600)")
     return 0
 
 

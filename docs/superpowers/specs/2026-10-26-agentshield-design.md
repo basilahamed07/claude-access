@@ -140,7 +140,7 @@ rules:
   - id: tighten-on-risk
     effect: block
     tool: "*"
-    when: { session.risk_score: { op: gte, value: 0.8 } }
+    when: { session: risk_score, op: gte, value: 0.8 }
     reason: "Session risk too high"
 ```
 - **Data scopes** [Fact, prompt §3 "data scopes"]: a top-level `scopes:` map names the data an agent may touch, and rules reference them, e.g.
@@ -402,7 +402,7 @@ claude-access/
 │   ├── pyproject.toml
 │   ├── src/agentshield/
 │   │   ├── contracts/        # pydantic models: Decision, CheckRequest/Response, AuditEvent, Policy
-│   │   ├── db/               # SQLAlchemy models, session, alembic env
+│   │   ├── db/               # engine, tenant_tx, SQL migration runner and migrations/*.sql (see Implementation notes)
 │   │   ├── tenants/          # registry, keys, crypto (Fernet), auth
 │   │   ├── gateway/          # app factory, routes (proxy, check, scan, token, admin), errors, idempotency, limits
 │   │   ├── proxy/            # upstream adapters, SSE parser, stream/message rewrite, sessions, untrusted parts
@@ -411,7 +411,6 @@ claude-access/
 │   │   ├── audit/            # redact, emitter, spool, worker, chain, read, replay, retention
 │   │   ├── testing/          # stub upstream used by tests and the demo
 │   │   └── cli.py            # verify-chain, create-tenant, seed
-│   ├── alembic/
 │   └── tests/{unit,integration,security}/
 ├── dashboard/                # React + Vite + TS
 ├── sdk/python/agentshield_sdk/
@@ -609,3 +608,15 @@ Scope (5 modules for one person → stages 1–4 only), streaming rewrite comple
 **Deliberate change from the prompt, decided by the owner (2026-10-26):** the prompt says to *extend the existing LiteLLM gateway*. The owner chose instead that AgentShield is an **independent product with its own universal proxy** that works for any agent and any provider; the LiteLLM gateway is only an example of something that can sit behind it as an upstream (§0 "Relationship to existing repos"). The source prompt is kept verbatim in `2026-10-25-agentshield-source-prompt.md`.
 
 **Not changed from the prompt but worth knowing:** the prompt suggests M1 and M2 as separate services; v1 runs them in-process inside the gateway for latency and simplicity, behind interfaces that allow a later split (my call, §7.3).
+
+
+## Implementation notes (where the built system differs from this design)
+Written after the backend, dashboard, SDK, eval and demo were built. The behaviour in this document holds; these are the places the implementation chose differently.
+- **Migrations are plain SQL files run by a small forward-only runner** (`agentshield/src/agentshield/db/migrate.py`, `migrations/*.sql`), not Alembic. Row-level security, partitions, triggers and grants cannot be expressed by an ORM, so the SQL is the single source of truth.
+- **Raw-SQL repositories, not ORM models.** Every tenant query runs inside `tenant_tx`, which sets `app.tenant_id` for Postgres RLS.
+- **Agent keys:** `ask_live_` plus 32 characters; the lookup prefix is 16 characters (a 12-character prefix left only three random characters).
+- **Policy condition form:** `when: { session: risk_score, op: gte, value: 0.8 }`; session conditions use `session:` instead of `arg:`.
+- **Agents start in monitor mode** (decisions are logged as "would have been blocked" but not enforced) so a policy can be reviewed before it bites.
+- **Retention:** payloads 30 days, envelopes 180 days, incident sessions 3 years. A partition is dropped only after a checkpoint event is written, and the database refuses to drop any partition younger than 180 days.
+- **Classifier:** none is bundled and the one measured configuration is rules only; see `eval/README.md` and `docs/classifier.md`.
+- **The demo tenant is set to `on_malicious: flag`** so the permission layer visibly stops an attack the scanner only flagged; the product default is `sanitize`.

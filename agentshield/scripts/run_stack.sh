@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Run a complete local AgentShield backend on a throwaway database: migrate, seed the demo tenant, start the
 # audit worker and the API. Used by the dashboard's end-to-end tests and handy for trying things by hand.
-#   demo login: demo@example.com / demo-password-123      API: http://127.0.0.1:${PORT:-8000}
+#   demo login: demo@example.com / ${STACK_DEMO_PASSWORD:-demo-password-123}      API: http://127.0.0.1:${PORT:-8000}
+# Local development and tests only: the database is recreated on every start, and the API binds to 127.0.0.1.
+# That fixed password must never be used on a reachable deployment (use `agentshield seed-demo`, which generates one).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=${PY:-.venv/bin/python}
@@ -32,7 +34,7 @@ export AGENTSHIELD_JWT_SECRET=${AGENTSHIELD_JWT_SECRET:-$(head -c 32 /dev/urando
 export AGENTSHIELD_SESSION_SECRET=${AGENTSHIELD_SESSION_SECRET:-$(head -c 32 /dev/urandom | base64)}
 export AGENTSHIELD_SPOOL_DIR=${AGENTSHIELD_SPOOL_DIR:-$(mktemp -d)}
 $PY -c "import redis; redis.Redis.from_url('$REDIS').flushdb()"
-$PY -m agentshield.cli seed-demo --password demo-password-123 >/dev/null
+$PY -m agentshield.cli seed-demo --password "${STACK_DEMO_PASSWORD:-demo-password-123}" >/dev/null
 $PY -m agentshield.cli worker &
 WORKER=$!
 trap 'kill $WORKER 2>/dev/null || true' EXIT

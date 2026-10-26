@@ -30,7 +30,7 @@ demo: up
 	PYTHONPATH=. $(DEMO_PY) demo/email_agent/setup_demo.py
 	PYTHONPATH=. $(DEMO_PY) demo/email_agent/run_unprotected.py
 	PYTHONPATH=. $(DEMO_PY) demo/email_agent/run_protected.py
-	@echo "Open http://localhost:8080 and sign in as demo-admin@example.com / demo-admin-password-123. The newest session is the attack."
+	@echo "Open http://localhost:8080 and sign in with the login and generated password printed above. The newest session is the attack."
 
 test:
 	cd agentshield && ./scripts/test.sh -q

@@ -1,0 +1,7 @@
+{
+  "source": "agentshield/tests/perf/test_check_latency.py, printed by `./scripts/test.sh tests/perf/test_check_latency.py -s` on 2026-10-26",
+  "conditions": "in-process ASGI client, Postgres 16 and Redis on the same machine, stub model provider, rules only (no classifier), n=150 sequential requests after 10 warm-up",
+  "check_with_scan": {"n": 150, "p50_ms": 17.4, "p95_ms": 22.4},
+  "proxied_tool_call": {"n": 150, "p50_ms": 15.8, "p95_ms": 22.5},
+  "policy_evaluator_200_rules": {"p95_ms": 0.16}
+}

@@ -122,3 +122,13 @@ def test_readme_block_is_rendered_from_result_files_only(tmp_path):
     readme.write_text("x\n<!-- results:start -->\nold\n<!-- results:end -->\ny")
     ev.write_readme(text, readme)
     assert readme.read_text().startswith("x\n<!-- results:start -->") and "\nold\n" not in readme.read_text() and readme.read_text().endswith("y")
+
+
+def test_readme_renderer_refuses_hand_typed_measurements_and_matches_the_committed_readme():
+    import sys
+    sys.path.insert(0, str(ROOT.parent / "scripts"))
+    import render_readme as rr
+    assert rr.hand_typed("We catch 93% of attacks, TPR 0.912, in 3 ms.") == ["93%", "0.912", "3 ms"]
+    assert rr.hand_typed("{{eval:rules:test:tpr}} and `code 0.5 here`\n```\nthreshold 0.8\n```") == []
+    assert rr.hand_typed((ROOT.parent / "README.template.md").read_text()) == []
+    assert rr.main(["--check"]) == 0

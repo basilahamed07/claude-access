@@ -18,7 +18,7 @@ import httpx
 import pytest
 
 from demo.email_agent import agent, mailbox, profiles, runner
-from demo.email_agent.setup_demo import EMAIL, PASSWORD, setup
+from demo.email_agent.setup_demo import EMAIL, setup
 
 ROOT = Path(__file__).resolve().parents[3]
 DSN, REDIS = os.environ.get("AGENTSHIELD_TEST_DSN"), os.environ.get("AGENTSHIELD_TEST_REDIS")
@@ -57,7 +57,7 @@ def stack(tmp_path_factory):
     try:
         wait_for(f"http://127.0.0.1:{api_port}/healthz", gateway)
         wait_for(f"http://127.0.0.1:{stub_port}/docs", stub)
-        out = setup(f"http://127.0.0.1:{api_port}", f"http://127.0.0.1:{stub_port}/v1")
+        out = setup(f"http://127.0.0.1:{api_port}", f"http://127.0.0.1:{stub_port}/v1", password=secrets.token_urlsafe(18))
         yield {"gateway": f"http://127.0.0.1:{api_port}", "stub": f"http://127.0.0.1:{stub_port}", **out}
     finally:
         for p in (gateway, stub):
@@ -79,9 +79,9 @@ def env(stack, tmp_path, monkeypatch):
     return stack
 
 
-def dashboard_events(stack, session_key: str, want: int = 4) -> tuple[list[dict], dict]:
+def dashboard_events(stack, want: int = 4) -> tuple[list[dict], dict]:
     c = httpx.Client(base_url=stack["gateway"], timeout=20)
-    c.post("/v1/auth/login", json={"email": EMAIL, "password": PASSWORD}).raise_for_status()
+    c.post("/v1/auth/login", json={"email": EMAIL, "password": stack["DASHBOARD_PASSWORD"]}).raise_for_status()
     for _ in range(60):
         sessions = c.get("/v1/admin/sessions?agent=email-reader-01").json()["items"]
         if sessions:
@@ -105,7 +105,7 @@ def test_protected_run_blocks_the_leak_and_leaves_a_verified_trail(env):
     t = agent.run(env=profiles.resolve("protected"))
     assert mailbox.read_outbox() == []
     assert "Action blocked by AgentShield" in t.final_reply and "deny-external-send" in t.final_reply
-    events, export = dashboard_events(env, t.session)
+    events, export = dashboard_events(env)
     scanned = [e for e in events if e["type"] == "content.scanned"]
     decisions = [e for e in events if e["type"] == "policy.decision" and e["decision"] == "block"]
     assert scanned and scanned[0]["payload"]["verdict"] == "malicious" and scanned[0]["severity"] == "high"
@@ -133,7 +133,7 @@ def test_running_it_twice_gives_the_same_result(env, capsys):
 
 def test_with_the_default_setting_the_scanner_removes_the_attack_before_the_model_sees_it(env):
     c = httpx.Client(base_url=env["gateway"], timeout=20)
-    login = c.post("/v1/auth/login", json={"email": EMAIL, "password": PASSWORD}).json()
+    login = c.post("/v1/auth/login", json={"email": EMAIL, "password": env["DASHBOARD_PASSWORD"]}).json()
     h = {"X-CSRF-Token": login["csrf_token"]}
     s = c.get("/v1/admin/settings")
     c.patch("/v1/admin/settings", json={"on_malicious": "sanitize"}, headers={**h, "If-Match": s.headers["etag"]}).raise_for_status()

@@ -209,7 +209,7 @@ Request body 2 MB (proxy), 1 MB per scan item, 64 KB event payload (stored), 10 
 - **Every foreign key column is indexed** (most as the second column of a `(tenant_id, …)` index) [pg:schema-foreign-key-indexes].
 - **Every tenant table:** `tenant_id uuid not null references tenants(id)`, RLS enabled and forced, and indexes lead with `tenant_id` [pg:security-rls-basics][pg:security-rls-performance].
 - `created_at timestamptz not null default now()`, `updated_at` maintained by a trigger where rows are mutable.
-- Migrations: Alembic, one revision per change, idempotent DDL (`if not exists`, `do $$ … $$` guards for constraints since `ADD CONSTRAINT IF NOT EXISTS` doesn't exist) [pg:schema-constraints]; destructive migrations need a two-step expand/contract.
+- Migrations: forward-only SQL files applied by `agentshield db upgrade` (Alembic was considered and not used, see the design doc's implementation notes), one file per change, idempotent DDL (`if not exists`, `do $$ … $$` guards for constraints since `ADD CONSTRAINT IF NOT EXISTS` doesn't exist) [pg:schema-constraints]; destructive migrations need a two-step expand/contract.
 
 ## B.2 Roles, RLS and per-request tenant context
 ```sql

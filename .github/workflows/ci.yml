@@ -27,6 +27,19 @@ jobs:
       - run: ruff check src tests
       - run: mypy
       - run: pytest -q -m "not slow"
+  readme-eval-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e "agentshield[dev]" -e "sdk/python[dev]"
+      - name: eval harness tests
+        run: python -m pytest eval -c eval/pytest.ini -q
+      - name: sdk tests
+        run: python -m pytest sdk/python -c sdk/python/pyproject.toml -q
+      - name: every number in the README comes from a result file
+        run: python scripts/render_readme.py --check
   contract:
     runs-on: ubuntu-latest
     needs: backend

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="14">
+  <title id="t">AgentShield architecture</title>
+  <desc id="d">An agent sends model calls or tool checks to the AgentShield gateway. The gateway scans untrusted content, evaluates the permission policy, asks a person when needed, then forwards to the model provider. Every step becomes an audit event that a worker writes to a hash-chained log shown in the dashboard.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#16202a"/></marker>
+    <style>
+      .box{fill:#fff;stroke:#16202a;stroke-width:1.5}
+      .gate{fill:#edf0f1;stroke:#16202a;stroke-width:1.5}
+      .stop{stroke:#e5560b;stroke-width:3}
+      .t{fill:#16202a} .s{fill:#46535e;font-size:12px}
+      .l{stroke:#16202a;stroke-width:1.5;fill:none}
+      @media (prefers-color-scheme: dark){.box{fill:#222d36;stroke:#e4eaee}.gate{fill:#1a232b;stroke:#e4eaee}.t{fill:#e4eaee}.s{fill:#a9b6c0}.l{stroke:#e4eaee}.stop{stroke:#ff7b30}}
+    </style>
+  </defs>
+  <rect x="20" y="150" width="150" height="90" rx="6" class="box"/>
+  <text x="95" y="188" text-anchor="middle" class="t" font-weight="600">Your agent</text>
+  <text x="95" y="208" text-anchor="middle" class="s">any framework</text>
+  <text x="95" y="224" text-anchor="middle" class="s">base URL + key</text>
+
+  <rect x="240" y="40" width="300" height="340" rx="6" class="gate"/>
+  <text x="390" y="66" text-anchor="middle" class="t" font-weight="600">AgentShield gateway</text>
+  <rect x="262" y="84" width="256" height="56" rx="4" class="box"/>
+  <text x="390" y="108" text-anchor="middle" class="t">Scan untrusted content</text>
+  <text x="390" y="126" text-anchor="middle" class="s">normalise, rules, classifier, judge</text>
+  <rect x="262" y="158" width="256" height="56" rx="4" class="box stop"/>
+  <text x="390" y="182" text-anchor="middle" class="t">Check permissions</text>
+  <text x="390" y="200" text-anchor="middle" class="s">default deny, budgets, session risk</text>
+  <rect x="262" y="232" width="256" height="56" rx="4" class="box"/>
+  <text x="390" y="256" text-anchor="middle" class="t">Ask a person</text>
+  <text x="390" y="274" text-anchor="middle" class="s">approval queue, webhook, 5 min limit</text>
+  <rect x="262" y="306" width="256" height="56" rx="4" class="box"/>
+  <text x="390" y="330" text-anchor="middle" class="t">Rewrite or forward</text>
+  <text x="390" y="348" text-anchor="middle" class="s">blocked call becomes a text reply</text>
+
+  <rect x="620" y="150" width="150" height="90" rx="6" class="box"/>
+  <text x="695" y="188" text-anchor="middle" class="t" font-weight="600">Model provider</text>
+  <text x="695" y="208" text-anchor="middle" class="s">OpenAI, Anthropic,</text>
+  <text x="695" y="224" text-anchor="middle" class="s">vLLM, Ollama, LiteLLM</text>
+
+  <rect x="620" y="300" width="150" height="80" rx="6" class="box"/>
+  <text x="695" y="334" text-anchor="middle" class="t" font-weight="600">Audit worker</text>
+  <text x="695" y="354" text-anchor="middle" class="s">hash-chained log</text>
+  <rect x="800" y="300" width="140" height="80" rx="6" class="box"/>
+  <text x="870" y="334" text-anchor="middle" class="t" font-weight="600">Dashboard</text>
+  <text x="870" y="354" text-anchor="middle" class="s">tape, replay, approvals</text>
+
+  <path d="M170 195H240" class="l" marker-end="url(#a)"/>
+  <path d="M540 195H620" class="l" marker-end="url(#a)"/>
+  <path d="M390 140V158M390 214V232M390 288V306" class="l" marker-end="url(#a)"/>
+  <path d="M540 340H620" class="l" marker-end="url(#a)"/>
+  <path d="M770 340H800" class="l" marker-end="url(#a)"/>
+  <text x="580" y="330" text-anchor="middle" class="s">every step</text>
+  <text x="205" y="184" text-anchor="middle" class="s">call</text>
+  <text x="95" y="270" text-anchor="middle" class="s">or POST /v1/check</text>
+</svg>

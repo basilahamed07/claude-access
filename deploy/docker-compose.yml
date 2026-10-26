@@ -1,4 +1,5 @@
-# AgentShield, the whole stack: `make up` (see the Makefile). Dashboard http://localhost:8080, API http://localhost:8000.
+# AgentShield, the whole stack. Ports bind to 127.0.0.1 only; set BIND_ADDRESS in deploy/.env to expose them (put TLS in front first).
+# Quickstart: `make up` (see the Makefile). Dashboard http://localhost:8080, API http://localhost:8000.
 name: agentshield
 
 x-backend-env: &backend-env
@@ -46,7 +47,7 @@ services:
     environment:
       <<: *backend-env
       AGENTSHIELD_DATABASE_URL: postgresql+asyncpg://agentshield_app_login:${AGENTSHIELD_APP_PASSWORD}@postgres:5432/postgres
-    ports: ["${API_PORT:-8000}:8000"]
+    ports: ["${BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8000}:8000"]
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
@@ -66,13 +67,13 @@ services:
 
   dashboard:
     build: { context: .., dockerfile: dashboard/Dockerfile }
-    ports: ["${DASHBOARD_PORT:-8080}:8080"]
+    ports: ["${BIND_ADDRESS:-127.0.0.1}:${DASHBOARD_PORT:-8080}:8080"]
     depends_on: { gateway: { condition: service_healthy } }
 
   stub-upstream:                 # a scripted model provider for the demo: needs no key, and is hijackable on purpose
     image: agentshield-backend
     command: ["uvicorn", "agentshield.testing.demo_stub:app", "--host", "0.0.0.0", "--port", "9100"]
-    ports: ["${STUB_PORT:-9100}:9100"]
+    ports: ["${BIND_ADDRESS:-127.0.0.1}:${STUB_PORT:-9100}:9100"]
     profiles: [demo]
 
   seed:                          # optional: `docker compose --profile seed run --rm seed` adds a demo tenant with a recorded attack
