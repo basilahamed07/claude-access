@@ -306,7 +306,7 @@ create table agent_keys (
   id          uuid primary key default uuidv7(),
   tenant_id   uuid not null references tenants(id),
   agent_id    uuid not null references agents(id),
-  prefix      text not null unique,                   -- first 12 chars, used by resolve_agent_key
+  prefix      text not null unique,                   -- first 16 chars (`ask_live_` + 7 random), used by resolve_agent_key
   key_hash    bytea not null,                         -- HMAC-SHA256(pepper, key)
   created_at  timestamptz not null default now(),
   expires_at  timestamptz,

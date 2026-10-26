@@ -355,7 +355,7 @@ Design rules (from the `supabase-postgres-best-practices` skill, applied in the 
 - Least-privilege roles: `agentshield_owner` (migrations), `agentshield_app` (gateway), `agentshield_worker` (only INSERT on `audit_events`), `agentshield_retention` (drops partitions, purges payloads), `agentshield_readonly`.
 
 Tables: `tenants`, `users`, `upstreams`, `agents` (with `slug` unique per tenant), `agent_keys`, `policy_versions`, `sessions`, `approvals`, `budget_counters`, `incidents`, `user_tokens`, `audit_events`, `audit_payloads` (payload bodies split out so they can be purged on a shorter schedule), `audit_chain_heads`, `audit_events_archive`, `audit_payloads_archive`, `scan_rule_sets`, and the later-stage `mcp_servers`, `ai_tools_seen`.
-- Agent key format `ask_live_<32 url-safe random chars>`; stored as `HMAC-SHA256(server_pepper, key)`; `prefix` = first 12 chars for display.
+- Agent key format `ask_live_<32 url-safe random chars>`; stored as `HMAC-SHA256(server_pepper, key)`; `prefix` = first 16 chars (`ask_live_` + 7 random) for display.
 
 ### 4.2 Event schema (v1) — shared by all modules
 ```json

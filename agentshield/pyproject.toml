@@ -54,7 +54,7 @@ agentshield = "agentshield.cli:main"
 packages = ["src/agentshield"]
 
 [tool.ruff]
-line-length = 100
+line-length = 110
 target-version = "py312"
 src = ["src", "tests"]
 
@@ -63,7 +63,7 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
 ignore = ["S101", "B008"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S105", "S106", "S108", "S311", "S104", "E501"]
+"tests/**" = ["S608", "S105", "S106", "S108", "S311", "S104", "E501"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -73,7 +73,7 @@ mypy_path = "src"
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["onnxruntime.*", "tokenizers.*", "fakeredis.*", "argon2.*", "jwt.*", "ulid.*", "prometheus_client.*"]
+module = ["asyncpg.*", "onnxruntime.*", "tokenizers.*", "fakeredis.*", "argon2.*", "jwt.*", "ulid.*", "prometheus_client.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

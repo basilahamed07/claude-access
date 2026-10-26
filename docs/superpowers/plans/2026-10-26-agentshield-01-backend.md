@@ -16,7 +16,7 @@
 - Effect tags exactly `read, write, destructive, external, financial, execute`; untagged → `external`; fail rule: only `read` may fail open (arch §7.4, §8.6).
 - Tenant comes from the credential only; every repository function takes `TenantContext`; every request transaction runs `set_config('app.tenant_id', …, true)`; RLS forced on all tenant tables (db §B.2).
 - Agent id on the wire = slug `^[a-z0-9][a-z0-9-]{1,62}$`; DB keys `uuid default uuidv7()` (db §B.1).
-- Agent key `ask_live_` + 32 url-safe chars, stored as HMAC-SHA256 with server pepper, `prefix` = first 12 chars; shown once (arch §4.1).
+- Agent key `ask_live_` + 32 url-safe chars, stored as HMAC-SHA256 with server pepper, `prefix` = first 16 chars (`ask_live_` + 7 random); shown once (arch §4.1).
 - Provider keys Fernet-encrypted with `AGENTSHIELD_MASTER_KEY`; never returned, logged, or put in events (arch §8.2).
 - Errors `application/problem+json` with the stable codes in api §A.5; proxy routes rewrite blocks instead of erroring.
 - Blocked tool block text: `Action blocked by AgentShield: <reason> (rule <id>, trace <trace_id>)`; ask text: `Action needs human approval (approval <id>, rule <rule_id>); it was not executed.`; all tool blocks replaced → `stop_reason=end_turn` / `finish_reason=stop` (arch §3.1).
@@ -105,7 +105,7 @@ agentshield/
 **Interfaces:**
 - Consumes: B1 contracts, B2 `tenant_tx`, security-definer functions.
 - Produces:
-  - `issue_secret(prefix: str, pepper: bytes) -> IssuedSecret(plaintext, hash, prefix12)`; `verify_secret(pepper, presented, stored_hash) -> bool` (constant time).
+  - `issue_secret(prefix: str, pepper: bytes) -> IssuedSecret(plaintext, hash, prefix16)`; `verify_secret(pepper, presented, stored_hash) -> bool` (constant time).
   - `encrypt_secret(master_key, plaintext) -> bytes`; `decrypt_secret(master_key, blob) -> str`.
   - `hash_password(pw) -> str`; `verify_password(hash, pw) -> bool` (argon2id m=64MiB t=3 p=1).
   - `mint_agent_jwt(tenant_id, agent_slug, secret, ttl=900) -> str`; `verify_agent_jwt(token, secret) -> AgentClaims`.
