@@ -373,6 +373,7 @@ class Timeline(Out):
 
 class ReplayStep(Out):
     seq: int
+    session_id: UUID | None = None
     ts: datetime
     trace_id: str
     tool: str

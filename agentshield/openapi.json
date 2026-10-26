@@ -1888,6 +1888,18 @@
             "title": "Seq",
             "type": "integer"
           },
+          "session_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
           "skipped": {
             "anyOf": [
               {

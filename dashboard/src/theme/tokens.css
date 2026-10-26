@@ -1,0 +1,28 @@
+/* Tokens exactly as the frontend design spec §2.1. --recorder means "stopped or malicious" and the focus ring. */
+:root {
+  --hangar: #edf0f1; --panel: #ffffff; --ink: #16202a; --rule: #c5ced4;
+  --recorder: #e5560b; --cleared: #2e6b5a; --holding: #8a6100;
+  --ink-soft: #46535e; --panel-sunk: #f5f7f8; --scrim: rgba(22, 32, 42, 0.45);
+  --font-ui: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Atkinson Hyperlegible Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --t-1: 0.831rem; --t0: 1rem; --t1: 1.2rem; --t2: 1.4375rem; --t3: 1.725rem; --t4: 2.075rem;
+  --r-panel: 6px; --r-input: 4px; --r-dot: 999px;
+  --drawer-shadow: -8px 0 24px rgba(22, 32, 42, 0.18);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --hangar: #1a232b; --panel: #222d36; --ink: #e4eaee; --rule: #3a4752;
+  --recorder: #ff7b30; --cleared: #5fb39a; --holding: #e0b341;
+  --ink-soft: #a9b6c0; --panel-sunk: #1d2830; --scrim: rgba(0, 0, 0, 0.55);
+  --drawer-shadow: -8px 0 24px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --hangar: #1a232b; --panel: #222d36; --ink: #e4eaee; --rule: #3a4752;
+    --recorder: #ff7b30; --cleared: #5fb39a; --holding: #e0b341;
+    --ink-soft: #a9b6c0; --panel-sunk: #1d2830; --scrim: rgba(0, 0, 0, 0.55);
+    --drawer-shadow: -8px 0 24px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}

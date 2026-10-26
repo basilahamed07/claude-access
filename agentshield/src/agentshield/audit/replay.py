@@ -96,7 +96,7 @@ async def load_calls(conn: AsyncConnection, tenant_id: UUID, *, session_ids: lis
 def replay_calls(policy: CompiledPolicy, calls: list[RecordedCall]) -> list[ReplayStep]:
     steps: list[ReplayStep] = []
     for c in calls:
-        step = ReplayStep(seq=c.seq, ts=c.ts, trace_id=c.trace_id, tool=c.tool, effect_tag=c.effect_tag,
+        step = ReplayStep(seq=c.seq, session_id=c.session_id, ts=c.ts, trace_id=c.trace_id, tool=c.tool, effect_tag=c.effect_tag,
                           recorded_decision=c.decision, recorded_rule=c.rule_id)
         if not c.has_arguments:
             step.skipped = "payload_purged_or_truncated"

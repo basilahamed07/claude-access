@@ -10,3 +10,7 @@ dist/
 .env
 agentshield/.hypothesis/
 eval/results/*.json
+dashboard/node_modules/
+dashboard/dist/
+dashboard/test-results/
+dashboard/playwright-report/

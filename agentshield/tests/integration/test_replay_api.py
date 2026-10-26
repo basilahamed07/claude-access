@@ -118,7 +118,7 @@ async def test_simulator_counts_changes_over_the_window_and_for_chosen_sessions(
     await world.acct.post("/v1/admin/agents/an-agent/policy/versions", {"yaml": RELAXED.replace("agent: email-reader-01\n", "")})
     sim = (await world.acct.post("/v1/admin/agents/an-agent/policy/simulate", {"version": 2, "since": "7d"})).json()
     assert sim["sessions"] == 1 and sim["changed"] == 1 and sim["newly_allowed"] == 1 and sim["newly_blocked"] == 0
-    assert sim["diffs"][0]["replay_rule"] == "allow-any-send" and sim["compared"] == 1 and not sim["truncated"]
+    assert sim["diffs"][0]["session_id"] == s["id"] and sim["diffs"][0]["replay_rule"] == "allow-any-send" and sim["compared"] == 1 and not sim["truncated"]
     same = (await world.acct.post("/v1/admin/agents/an-agent/policy/simulate", {"version": 1, "session_ids": [s["id"]]})).json()
     assert same["changed"] == 0 and same["compared"] == 1
     nothing = (await world.acct.post("/v1/admin/agents/an-agent/policy/simulate",
