@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     cookie_secure: bool = True
 
-    classifier: Literal["null", "stub", "protectai_v2", "prompt_guard_2_22m"] = "null"
+    classifier: Literal["null", "stub", "onnx", "protectai_v2", "prompt_guard_2_22m"] = "null"
     classifier_dir: str = ""
     rules_path: str = ""
 

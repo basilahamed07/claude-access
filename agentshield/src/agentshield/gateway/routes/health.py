@@ -29,5 +29,9 @@ async def readyz(request: Request) -> JSONResponse:
         checks["redis"] = "ok"
     except Exception:  # noqa: BLE001
         checks["redis"] = "down"
-    ok = all(v == "ok" for v in checks.values())
+    clf = state.classifier
+    checks["classifier"] = clf.status                       # ok | disabled | degraded: never silently "clean"
+    if clf.status == "degraded":
+        checks["classifier_reason"] = clf.reason[:200]
+    ok = all(v == "ok" for k, v in checks.items() if k in {"database", "redis"})
     return JSONResponse({"status": "ok" if ok else "unavailable", **checks}, status_code=200 if ok else 503)

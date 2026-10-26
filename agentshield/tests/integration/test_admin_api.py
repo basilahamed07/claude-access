@@ -366,3 +366,18 @@ async def test_health_endpoints(api):
     assert (await c.get("/healthz")).json() == {"status": "ok"}
     ready = await c.get("/readyz")
     assert ready.status_code == 200 and ready.json()["database"] == "ok" and ready.json()["redis"] == "ok"
+
+
+async def test_readyz_reports_the_classifier_state_honestly(api, db_urls, app):
+    from httpx import ASGITransport, AsyncClient
+    from tests.conftest import make_settings
+
+    from agentshield.gateway.app import create_app
+    ready = (await api.client().get("/readyz")).json()
+    assert ready["classifier"] == "disabled"                                  # configured off: not "ok", not "degraded"
+    degraded_app = create_app(make_settings(db_urls, classifier="protectai_v2", classifier_dir="/nonexistent"))
+    async with degraded_app.router.lifespan_context(degraded_app):
+        async with AsyncClient(transport=ASGITransport(app=degraded_app), base_url="http://test") as c:
+            r = await c.get("/readyz")
+    assert r.status_code == 200                                               # rules-only still protects: stay in rotation...
+    assert r.json()["classifier"] == "degraded" and "tokenizer.json" in r.json()["classifier_reason"]   # ...but say so

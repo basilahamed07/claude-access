@@ -37,6 +37,7 @@ dependencies = [
 [project.optional-dependencies]
 ml = ["onnxruntime>=1.18", "tokenizers>=0.19", "numpy>=1.26"]
 dev = [
+  "onnx>=1.16",
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
   "respx>=0.21",
