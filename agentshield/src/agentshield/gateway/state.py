@@ -9,6 +9,8 @@ import redis.asyncio as aioredis
 from fastapi import FastAPI, Request
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from ..audit.emitter import Emitter
+from ..audit.spool import Spool
 from ..db.engine import create_engine
 from ..proxy.pipeline import JudgeFactory
 from ..proxy.upstream import UpstreamClient
@@ -22,6 +24,7 @@ class AppState:
     redis: aioredis.Redis
     http: httpx.AsyncClient
     upstream: UpstreamClient
+    emitter: Emitter
     pepper: bytes
     master_key: bytes
     jwt_secret: str
@@ -31,10 +34,12 @@ class AppState:
 
 async def init_state(app: FastAPI, settings: Settings) -> AppState:
     http = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=5.0), follow_redirects=False)
+    redis = aioredis.from_url(settings.redis_url, decode_responses=False)
     state = AppState(
         settings=settings,
         engine=create_engine(settings.database_url),
-        redis=aioredis.from_url(settings.redis_url, decode_responses=False),
+        redis=redis,
+        emitter=Emitter(redis, Spool(settings.spool_dir)),
         http=http,
         upstream=UpstreamClient(http, allow_private=settings.private_hosts, max_bytes=settings.upstream_max_bytes),
         pepper=settings.pepper_bytes,

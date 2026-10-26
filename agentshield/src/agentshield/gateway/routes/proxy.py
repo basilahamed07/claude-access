@@ -7,12 +7,15 @@ AgentShield-specific signal travels in `X-AgentShield-*` headers and the audit l
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
+from ...audit.events import make_event
 from ...contracts.errors import ApiError
+from ...contracts.events import EventType
 from ...contracts.ids import new_trace_id
 from ...db.tenant_tx import tenant_tx
 from ...proxy.anthropic_stream import rewrite_anthropic, rewrite_anthropic_message
@@ -20,7 +23,9 @@ from ...proxy.openai_stream import rewrite_openai, rewrite_openai_message
 from ...proxy.pipeline import ProxyCall
 from ...proxy.sessions import SESSION_HEADER, USER_HEADER, first_user_message, session_key, upsert_session
 from ...proxy.tools import ToolJudge, allow_all
+from ...proxy.untrusted import extract_untrusted
 from ...proxy.upstream import UpstreamConfig, api_matches_kind
+from ...proxy.usage import StreamObserver, usage_from_message
 from ...tenants import registry
 from ...tenants.auth import agent_ctx
 from ...tenants.context import TenantContext
@@ -103,9 +108,17 @@ async def handle_proxy(request: Request, ctx: TenantContext, api: Api) -> Respon
                          base_url=row["base_url"], api_key=None, model_map=row["model_map"] or {},
                          judge_model=row["judge_model"])
     upstream_model, _entry = cfg.resolve_model(str(body["model"]))
+    untrusted_parts = extract_untrusted(api, body)
     out_body = {**body, "model": upstream_model}
     request.state.session = session
     trace_header = {"X-AgentShield-Trace": trace_id, "X-AgentShield-Session": session.key}
+    await state.emitter.emit(
+        make_event(ctx, trace_id, "gateway", EventType.request_received,
+                   f"{api} request to {row['upstream_name']} (model {body['model']}, stream={bool(body.get('stream'))})",
+                   session=session),
+        {"api": api, "model": str(body["model"]), "upstream_model": upstream_model, "stream": bool(body.get("stream")),
+         "message_count": len(body["messages"]), "tool_result_parts": len(untrusted_parts),
+         "tools_declared": len(body.get("tools") or []), "user_request": user_request})
     judge: ToolJudge = allow_all
     if state.judge_factory is not None:
         judge = state.judge_factory(ProxyCall(request=request, ctx=ctx, session=session, trace_id=trace_id,
@@ -118,7 +131,20 @@ async def handle_proxy(request: Request, ctx: TenantContext, api: Api) -> Respon
             await resp.aclose()
             return _error_passthrough(request, api, resp.status_code, data, resp.headers, trace_header)
         rewrite = rewrite_anthropic if api == "anthropic" else rewrite_openai
-        return StreamingResponse(rewrite(state.upstream.iter_bytes(resp), judge), media_type="text/event-stream",
+
+        async def observed() -> AsyncIterator[bytes]:
+            obs = StreamObserver(api)
+            try:
+                async for chunk in rewrite(state.upstream.iter_bytes(resp), judge):
+                    obs.feed(chunk)
+                    yield chunk
+            finally:
+                await state.emitter.emit(
+                    make_event(ctx, trace_id, "gateway", EventType.model_response,
+                               f"stream finished (stop_reason={obs.usage.stop_reason})", session=session),
+                    {"status": 200, "stream": True, **obs.usage.as_payload()})
+
+        return StreamingResponse(observed(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", **trace_header})
 
     resp = await state.upstream.complete(cfg, api, out_body, headers, api_key)
@@ -135,6 +161,11 @@ async def handle_proxy(request: Request, ctx: TenantContext, api: Api) -> Respon
         new_body, changed = await rewrite_msg(parsed, judge)
         if changed:                                    # untouched answers stay byte-identical
             content = json.dumps(new_body, separators=(",", ":")).encode()
+        usage = usage_from_message(api, new_body)
+        await state.emitter.emit(
+            make_event(ctx, trace_id, "gateway", EventType.model_response,
+                       f"response (stop_reason={usage.stop_reason})", session=session),
+            {"status": resp.status_code, "stream": False, "rewritten": changed, **usage.as_payload()})
     return Response(content, status_code=resp.status_code, media_type=media_type,
                     headers={**_echo(resp.headers), **trace_header})
 

@@ -220,3 +220,24 @@ class TenantSettingsPatch(In):
     webhook_url: str | None = None
     retention: Retention | None = None
     judge_upstream_id: UUID | None = None
+
+
+class EventRead(Out):
+    seq: int
+    ts: datetime
+    id: str
+    trace_id: str
+    session_id: UUID | None = None
+    agent_slug: str | None = None
+    end_user: str | None = None
+    module: str
+    type: str
+    decision: str | None = None
+    rule_id: str | None = None
+    reason: str | None = None
+    severity: str
+    summary: str
+    payload_truncated: bool = False
+    payload_available: bool = False
+    hash: str
+    payload: dict[str, object] | None = None

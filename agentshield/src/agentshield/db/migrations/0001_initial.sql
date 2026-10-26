@@ -259,6 +259,7 @@ create table if not exists audit_events (
   otel_span_id      text,
   primary key (tenant_id, seq, ts)
 ) partition by range (ts);
+create unique index if not exists audit_events_event_id_idx on audit_events (tenant_id, id, ts);
 create index if not exists audit_events_trace_idx on audit_events (tenant_id, trace_id);
 create index if not exists audit_events_session_idx on audit_events (tenant_id, session_id, seq);
 create index if not exists audit_events_filter_idx on audit_events (tenant_id, ts desc, seq desc);
