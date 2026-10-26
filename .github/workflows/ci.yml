@@ -1,0 +1,40 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+    env:
+      AGENTSHIELD_TEST_DSN: postgresql://postgres:postgres@localhost:5432/postgres
+      AGENTSHIELD_TEST_REDIS: redis://localhost:6379/0
+    defaults: { run: { working-directory: agentshield } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: mypy
+      - run: pytest -q -m "not slow"
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: dashboard } }
+    steps:
+      - uses: actions/checkout@v4
+        if: hashFiles('dashboard/package.json') != ''
+      - uses: actions/setup-node@v4
+        if: hashFiles('dashboard/package.json') != ''
+        with: { node-version: 22 }
+      - run: npm ci && npm run lint && npm test -- --run && npm run build
+        if: hashFiles('dashboard/package.json') != ''

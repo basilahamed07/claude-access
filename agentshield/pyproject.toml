@@ -1,0 +1,91 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentshield"
+version = "0.1.0"
+description = "AgentShield: a security checkpoint between AI agents and everything they can touch"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "httpx>=0.27",
+  "pydantic>=2.8",
+  "pydantic-settings>=2.4",
+  "sqlalchemy[asyncio]>=2.0.32",
+  "asyncpg>=0.29",
+  "alembic>=1.13",
+  "redis>=5.0",
+  "pyyaml>=6.0",
+  "cryptography>=43",
+  "argon2-cffi>=23.1",
+  "pyjwt>=2.9",
+  "python-ulid>=2.7",
+  "python-multipart>=0.0.9",
+  "email-validator>=2.2",
+  "prometheus-client>=0.20",
+  "opentelemetry-api>=1.26",
+  "opentelemetry-sdk>=1.26",
+  "opentelemetry-instrumentation-fastapi>=0.47b0",
+  "opentelemetry-instrumentation-httpx>=0.47b0",
+]
+
+[project.optional-dependencies]
+ml = ["onnxruntime>=1.18", "tokenizers>=0.19", "numpy>=1.26"]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "respx>=0.21",
+  "fakeredis>=2.24",
+  "hypothesis>=6.108",
+  "schemathesis>=3.34",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "types-PyYAML",
+]
+
+[project.scripts]
+agentshield = "agentshield.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentshield"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
+ignore = ["S101", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S108", "S311", "S104", "E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["onnxruntime.*", "tokenizers.*", "fakeredis.*", "argon2.*", "jwt.*", "ulid.*", "prometheus_client.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+  "integration: needs Postgres and Redis (AGENTSHIELD_TEST_DSN, AGENTSHIELD_TEST_REDIS)",
+  "security: security-focused tests",
+  "perf: latency measurements (print measured values)",
+  "slow: slow tests",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
