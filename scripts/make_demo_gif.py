@@ -51,6 +51,24 @@ def terminal_page(command: str, output: str, verdict_class: str) -> str:
 <div style="position:absolute;left:36px;bottom:36px;font:600 22px system-ui;padding:8px 16px;border-radius:4px;{verdict_class}"></div></body></html>"""
 
 
+REPLAY = ROOT / "dashboard" / "static" / "replay.json"
+
+
+def export_recording(gateway: str, email: str, password: str, transcript: str) -> None:
+    """Save the protected session's export for the hosted read-only replay (dashboard/static/replay.json)."""
+    import json
+    c = httpx.Client(base_url=gateway, timeout=30)
+    c.post("/v1/auth/login", json={"email": email, "password": password}).raise_for_status()
+    session_key = next(line.split(": ", 1)[1] for line in transcript.splitlines() if line.startswith("Session: "))
+    sessions = c.get("/v1/admin/sessions?agent=email-reader-01").json()["items"]
+    sid = sessions[0]["id"]                                  # newest = the protected run
+    export = c.get(f"/v1/admin/sessions/{sid}/export.json").json()
+    export["session"]["user_request"] = export["session"].get("user_request")
+    REPLAY.parent.mkdir(parents=True, exist_ok=True)
+    REPLAY.write_text(json.dumps(export, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"wrote {REPLAY} for {session_key}")
+
+
 def main() -> int:
     env0 = {**os.environ, "AGENTSHIELD_TEST_DSN": os.environ.get("AGENTSHIELD_TEST_DSN", "postgresql://postgres@localhost:5433/postgres"),
             "AGENTSHIELD_TEST_REDIS": os.environ.get("AGENTSHIELD_TEST_REDIS", "redis://localhost:6380/0")}
@@ -83,11 +101,14 @@ def main() -> int:
         (tmp / "unprotected.txt").write_text(texts["unprotected"])
         (tmp / "protected.txt").write_text(texts["protected"])
         time.sleep(4)                                     # let the audit worker write the trail
+        export_recording(f"http://127.0.0.1:{api}", EMAIL, keys["DASHBOARD_PASSWORD"], texts["protected"])
         (tmp / "frames").mkdir()
         rc = subprocess.run(["node", "scripts/record_demo_frames.mjs", f"http://127.0.0.1:{web}", EMAIL, keys["DASHBOARD_PASSWORD"], str(tmp)], cwd=ROOT / "dashboard", capture_output=True, text=True)
         if rc.returncode != 0:
             raise SystemExit(rc.stdout + rc.stderr)
         frames = sorted((tmp / "frames").glob("*.png"))
+        if not frames:
+            raise SystemExit(f"no frames were recorded (rc={rc.returncode}, dir={tmp}, files={sorted(p.name for p in tmp.rglob(chr(42)))})\n{rc.stdout}\n{rc.stderr}")
         listing = tmp / "list.txt"
         listing.write_text("".join(f"file '{f}'\nduration {SECONDS[i % len(SECONDS)]}\n" for i, f in enumerate(frames)) + f"file '{frames[-1]}'\n")
         palette = tmp / "palette.png"

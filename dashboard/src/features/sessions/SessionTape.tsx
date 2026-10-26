@@ -124,7 +124,7 @@ export function SessionTape({ id }: { id: string }) {
   );
 }
 
-function Row({ e, index, active, fresh, ghost, version }: { e: TapeEvent; index: number; active: boolean; fresh: boolean; ghost?: Schemas["ReplayStep"]; version: number | null }) {
+export function Row({ e, index, active, fresh, ghost, version }: { e: TapeEvent; index: number; active: boolean; fresh: boolean; ghost?: Schemas["ReplayStep"]; version: number | null }) {
   const place = placementOf(e.type);
   const blocked = isBlocked(e);
   const cls = `trow${blocked ? " is-blocked" : ""}${active ? " is-active" : ""}${fresh ? " draw" : ""}`;

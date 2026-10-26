@@ -7,11 +7,13 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "lint": "eslint src e2e",
+    "lint": "eslint src e2e e2e-static",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
     "gen:api": "openapi-typescript ../agentshield/openapi.json -o src/api/schema.d.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "build:static": "tsc --noEmit && vite build --config vite.static.config.ts && mv dist-static/static.html dist-static/index.html",
+    "e2e:static": "playwright test --config playwright.static.config.ts"
   },
   "dependencies": {
     "@codemirror/lang-yaml": "^6.1.3",

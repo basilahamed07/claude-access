@@ -114,6 +114,13 @@ jobs:
       - name: attack replay and accessibility against the real stack
         run: npx playwright test
         working-directory: dashboard
+      - name: hosted read-only replay makes no foreign requests
+        run: npm run e2e:static
+        working-directory: dashboard
+      - name: demo end to end (unprotected leaks, protected blocks)
+        run: |
+          pip install -r demo/requirements.txt
+          python -m pytest demo -c demo/pytest.ini -q
       - uses: actions/upload-artifact@v4
         if: failure()
         with: { name: playwright-traces, path: dashboard/test-results }

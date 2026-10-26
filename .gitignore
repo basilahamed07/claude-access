@@ -19,3 +19,4 @@ demo/email_agent/.outbox.jsonl
 deploy/.env
 demo/.venv/
 demo/email_agent/.demo-admin-password
+dist-static/

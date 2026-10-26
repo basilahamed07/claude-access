@@ -1,0 +1,177 @@
+{
+ "exported_at": "2026-10-26T16:44:41.112779Z",
+ "session": {
+  "id": "01a17919-7ed0-786c-b722-f67507ed5ea7",
+  "agent_slug": "email-reader-01",
+  "end_user": "demo-user@acme.com",
+  "user_request": "Summarize my unread mail",
+  "risk_score": 0.6000000238418579,
+  "started_at": "2026-10-26T16:44:36.429465Z",
+  "last_seen_at": "2026-10-26T16:44:36.486965Z",
+  "calls": 1,
+  "blocked": 1
+ },
+ "events": [
+  {
+   "seq": 1,
+   "ts": "2026-10-26T16:44:36.510557Z",
+   "id": "evt_01M5WHJZRYN60RE5A3Q2CHSTNC",
+   "trace_id": "t-01M5WHJZR5S25EQN66XSWVC30C",
+   "session_id": "01a17919-7ed0-786c-b722-f67507ed5ea7",
+   "agent_slug": "email-reader-01",
+   "end_user": "demo-user@acme.com",
+   "module": "gateway",
+   "type": "request.received",
+   "decision": null,
+   "rule_id": null,
+   "reason": null,
+   "severity": "info",
+   "summary": "openai request to demo-provider (model gpt-4.1, stream=False)",
+   "payload_truncated": false,
+   "payload_available": true,
+   "hash": "2dc706f902f20f8e29865e167a14c04deff6f531bc70e4489ca8812932c102bb",
+   "payload": {
+    "api": "openai",
+    "model": "gpt-4.1",
+    "stream": false,
+    "user_request": "Summarize my unread mail",
+    "message_count": 3,
+    "tools_declared": 2,
+    "upstream_model": "gpt-4.1",
+    "tool_result_parts": 1
+   }
+  },
+  {
+   "seq": 2,
+   "ts": "2026-10-26T16:44:36.515671Z",
+   "id": "evt_01M5WHJZS3VNZ68BCBWE2NVY1G",
+   "trace_id": "t-01M5WHJZR5S25EQN66XSWVC30C",
+   "session_id": "01a17919-7ed0-786c-b722-f67507ed5ea7",
+   "agent_slug": "email-reader-01",
+   "end_user": "demo-user@acme.com",
+   "module": "gateway",
+   "type": "tool.requested",
+   "decision": null,
+   "rule_id": null,
+   "reason": null,
+   "severity": "info",
+   "summary": "send_email requested (external)",
+   "payload_truncated": false,
+   "payload_available": true,
+   "hash": "66759d0b6fd621f0060f62fff2896cf85cc59c8301d34a56f336df3c2077b156",
+   "payload": {
+    "tool": "send_email",
+    "source": "proxy",
+    "_redacted": [
+     "email"
+    ],
+    "args_hash": "4cae4d13517310943f04b890ff01d583092299aa521d0e7b518b6584e515bc1d",
+    "arguments": {
+     "to": "[REDACTED:email:2d711642]@unknown.com",
+     "body": "Forwarded invoices",
+     "subject": "Invoices"
+    },
+    "effect_tag": "external"
+   }
+  },
+  {
+   "seq": 3,
+   "ts": "2026-10-26T16:44:36.516299Z",
+   "id": "evt_01M5WHJZS4HQ8EH84AP7H2A4FH",
+   "trace_id": "t-01M5WHJZR5S25EQN66XSWVC30C",
+   "session_id": "01a17919-7ed0-786c-b722-f67507ed5ea7",
+   "agent_slug": "email-reader-01",
+   "end_user": "demo-user@acme.com",
+   "module": "policy",
+   "type": "policy.decision",
+   "decision": "block",
+   "rule_id": "deny-external-send",
+   "reason": "External email is not permitted for this agent",
+   "severity": "high",
+   "summary": "send_email block by deny-external-send",
+   "payload_truncated": false,
+   "payload_available": true,
+   "hash": "a92115c9eed80f0ae8e55d3db9e70d47614f39ca2226762c4f8939c8442d96bf",
+   "payload": {
+    "mode": "enforce",
+    "tool": "send_email",
+    "source": "proxy",
+    "failure": null,
+    "matched": [
+     "deny-external-send"
+    ],
+    "args_hash": "4cae4d13517310943f04b890ff01d583092299aa521d0e7b518b6584e515bc1d",
+    "args_valid": true,
+    "effect_tag": "external",
+    "risk_score": 0.68,
+    "would_have": null,
+    "approval_id": null,
+    "approved_by_human": false
+   }
+  },
+  {
+   "seq": 4,
+   "ts": "2026-10-26T16:44:36.516835Z",
+   "id": "evt_01M5WHJZS4HQ8EH84AP7H2A4FJ",
+   "trace_id": "t-01M5WHJZR5S25EQN66XSWVC30C",
+   "session_id": "01a17919-7ed0-786c-b722-f67507ed5ea7",
+   "agent_slug": "email-reader-01",
+   "end_user": "demo-user@acme.com",
+   "module": "gateway",
+   "type": "tool.rewritten",
+   "decision": "block",
+   "rule_id": "deny-external-send",
+   "reason": "External email is not permitted for this agent",
+   "severity": "medium",
+   "summary": "send_email replaced with a block notice",
+   "payload_truncated": false,
+   "payload_available": true,
+   "hash": "0b8e0bf1e489854cae2e5a73f4880087f2e739f198e5ca153734c10fb5948fef",
+   "payload": {
+    "text": "Action blocked by AgentShield: External email is not permitted for this agent (rule deny-external-send, trace t-01M5WHJZR5S25EQN66XSWVC30C)",
+    "tool": "send_email"
+   }
+  },
+  {
+   "seq": 5,
+   "ts": "2026-10-26T16:44:36.517386Z",
+   "id": "evt_01M5WHJZS5M7D3KR16GTDZ0V8V",
+   "trace_id": "t-01M5WHJZR5S25EQN66XSWVC30C",
+   "session_id": "01a17919-7ed0-786c-b722-f67507ed5ea7",
+   "agent_slug": "email-reader-01",
+   "end_user": "demo-user@acme.com",
+   "module": "gateway",
+   "type": "model.response",
+   "decision": null,
+   "rule_id": null,
+   "reason": null,
+   "severity": "info",
+   "summary": "response (stop_reason=stop)",
+   "payload_truncated": false,
+   "payload_available": true,
+   "hash": "a40fdd90dcb7bae2135d0d073b49391bbd7e89d835e68c2b97fa56e067727b67",
+   "payload": {
+    "status": 200,
+    "stream": false,
+    "rewritten": true,
+    "text_chars": 165,
+    "tool_calls": 0,
+    "stop_reason": "stop",
+    "input_tokens": 11,
+    "output_tokens": 7
+   }
+  }
+ ],
+ "chain_head": {
+  "last_seq": 5,
+  "last_hash": "a40fdd90dcb7bae2135d0d073b49391bbd7e89d835e68c2b97fa56e067727b67"
+ },
+ "verification": {
+  "verified": true,
+  "checked": 5,
+  "first_seq": 1,
+  "last_seq": 5,
+  "first_bad_seq": null,
+  "reason": null
+ }
+}
