@@ -1,0 +1,28 @@
+version: 1
+agent: email-reader-01
+budgets: { max_calls_per_day: 500, max_rpm: 120 }
+scopes:
+  mail_folders: ["INBOX", "Invoices"]
+tools:
+  read_email: { effect_tag: read }
+  send_email: { effect_tag: external }
+tag_defaults: { financial: ask, destructive: ask, execute: block }
+rules:
+  - id: allow-read-mail
+    effect: allow
+    tool: read_email
+    when: { arg: folder, op: in_scope, value: mail_folders }
+  - id: deny-external-send
+    effect: block
+    tool: send_email
+    when: { arg: to, op: not_domain_in, value: ["acme.com"] }
+    reason: "External email is not permitted for this agent"
+  - id: allow-internal-send
+    effect: allow
+    tool: send_email
+    when: { arg: to, op: domain_in, value: ["acme.com"] }
+  - id: tighten-on-risk
+    effect: block
+    tool: "*"
+    when: { session: risk_score, op: gte, value: 0.8 }
+    reason: "Session risk too high"

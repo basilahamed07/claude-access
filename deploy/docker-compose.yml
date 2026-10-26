@@ -1,0 +1,90 @@
+# AgentShield, the whole stack: `make up` (see the Makefile). Dashboard http://localhost:8080, API http://localhost:8000.
+name: agentshield
+
+x-backend-env: &backend-env
+  AGENTSHIELD_ENV: ${AGENTSHIELD_ENV:-prod}
+  AGENTSHIELD_REDIS_URL: redis://redis:6379/0
+  AGENTSHIELD_MASTER_KEY: ${AGENTSHIELD_MASTER_KEY:?run `make env` to generate secrets}
+  AGENTSHIELD_KEY_PEPPER: ${AGENTSHIELD_KEY_PEPPER:?run `make env`}
+  AGENTSHIELD_JWT_SECRET: ${AGENTSHIELD_JWT_SECRET:?run `make env`}
+  AGENTSHIELD_SESSION_SECRET: ${AGENTSHIELD_SESSION_SECRET:?run `make env`}
+  AGENTSHIELD_COOKIE_SECURE: ${AGENTSHIELD_COOKIE_SECURE:-false}      # set true behind HTTPS
+  AGENTSHIELD_CORS_ORIGINS: ${AGENTSHIELD_CORS_ORIGINS:-http://localhost:8080}
+  AGENTSHIELD_DASHBOARD_URL: ${AGENTSHIELD_DASHBOARD_URL:-http://localhost:8080}
+  AGENTSHIELD_ALLOW_PRIVATE_UPSTREAMS: ${AGENTSHIELD_ALLOW_PRIVATE_UPSTREAMS:-stub-upstream}
+  AGENTSHIELD_METRICS_ALLOWED_CIDRS: ${AGENTSHIELD_METRICS_ALLOWED_CIDRS:-172.16.0.0/12}
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run `make env`}
+    volumes: [pgdata:/var/lib/postgresql]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U postgres"], interval: 3s, timeout: 3s, retries: 20 }
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 3s, timeout: 3s, retries: 20 }
+
+  migrate:                       # one-shot: schema, partitions, login roles
+    build: ../agentshield
+    image: agentshield-backend
+    command: ["sh", "-c", "agentshield db upgrade && agentshield db create-logins && agentshield db ensure-partitions"]
+    environment:
+      <<: *backend-env
+      AGENTSHIELD_OWNER_DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/postgres
+      AGENTSHIELD_APP_PASSWORD: ${AGENTSHIELD_APP_PASSWORD:?run `make env`}
+      AGENTSHIELD_WORKER_PASSWORD: ${AGENTSHIELD_WORKER_PASSWORD:?run `make env`}
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: "no"
+
+  gateway:
+    image: agentshield-backend
+    networks: { default: { aliases: [api] } }
+    environment:
+      <<: *backend-env
+      AGENTSHIELD_DATABASE_URL: postgresql+asyncpg://agentshield_app_login:${AGENTSHIELD_APP_PASSWORD}@postgres:5432/postgres
+    ports: ["${API_PORT:-8000}:8000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/healthz', timeout=2)"], interval: 5s, timeout: 3s, retries: 20 }
+
+  worker:                        # writes the audit log: hash chain, payloads
+    image: agentshield-backend
+    command: ["agentshield", "worker"]
+    environment:
+      <<: *backend-env
+      AGENTSHIELD_DATABASE_URL: postgresql+asyncpg://agentshield_app_login:${AGENTSHIELD_APP_PASSWORD}@postgres:5432/postgres
+      AGENTSHIELD_WORKER_DATABASE_URL: postgresql+asyncpg://agentshield_worker_login:${AGENTSHIELD_WORKER_PASSWORD}@postgres:5432/postgres
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  dashboard:
+    build: { context: .., dockerfile: dashboard/Dockerfile }
+    ports: ["${DASHBOARD_PORT:-8080}:8080"]
+    depends_on: { gateway: { condition: service_healthy } }
+
+  stub-upstream:                 # a scripted model provider for the demo: needs no key, and is hijackable on purpose
+    image: agentshield-backend
+    command: ["uvicorn", "agentshield.testing.demo_stub:app", "--host", "0.0.0.0", "--port", "9100"]
+    ports: ["${STUB_PORT:-9100}:9100"]
+    profiles: [demo]
+
+  seed:                          # optional: `docker compose --profile seed run --rm seed` adds a demo tenant with a recorded attack
+    image: agentshield-backend
+    command: ["agentshield", "seed-demo"]
+    environment:
+      <<: *backend-env
+      AGENTSHIELD_DATABASE_URL: postgresql+asyncpg://agentshield_app_login:${AGENTSHIELD_APP_PASSWORD}@postgres:5432/postgres
+      AGENTSHIELD_OWNER_DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/postgres
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    profiles: [seed]
+
+volumes:
+  pgdata:
+  redisdata:

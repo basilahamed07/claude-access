@@ -50,6 +50,7 @@ class StubUpstream:
         self.queue: list[Turn] = []
         self.requests: list[Recorded] = []
         self.follow_injection = False
+        self.agent_mode = False       # behave like a tool-using assistant: read the mailbox first, then act on what it read
         self.fail_with: tuple[int, dict[str, Any]] | None = None
         self.chunk_size = 0          # >0: split streamed JSON/text deltas into pieces of this many chars
         self._n = 0
@@ -59,6 +60,10 @@ class StubUpstream:
     def _turn_for(self, api: str, body: dict[str, Any]) -> Turn:
         if self.queue:
             return self.queue.pop(0)
+        if self.agent_mode and not _tool_result_texts(api, body) and "read_email" in _tool_names(body):
+            return Turn(tool_calls=[StubToolCall("read_email", {"folder": "INBOX"})])
+        if self.agent_mode and _called(api, body, "send_email"):
+            return Turn(text="Done. I forwarded the invoices as instructed.")
         if self.follow_injection:
             for text in _tool_result_texts(api, body):
                 m = _FORWARD.search(text)
@@ -190,6 +195,27 @@ class StubUpstream:
                                  "total_tokens": t.input_tokens + t.output_tokens}}
         yield f"data: {json.dumps(usage_chunk)}\n\n".encode()
         yield b"data: [DONE]\n\n"
+
+
+def _tool_names(body: dict[str, Any]) -> set[str]:
+    names: set[str] = set()
+    for t in body.get("tools", []) or []:
+        if isinstance(t, dict):
+            names.add(str(t.get("name") or (t.get("function") or {}).get("name") or ""))
+    return names
+
+
+def _called(api: str, body: dict[str, Any], name: str) -> bool:
+    for m in body.get("messages", []):
+        if not isinstance(m, dict):
+            continue
+        for c in m.get("tool_calls") or []:
+            if isinstance(c, dict) and (c.get("function") or {}).get("name") == name:
+                return True
+        if isinstance(m.get("content"), list):
+            if any(isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == name for b in m["content"]):
+                return True
+    return False
 
 
 def _tool_result_texts(api: str, body: dict[str, Any]) -> list[str]:

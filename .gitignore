@@ -14,3 +14,7 @@ dashboard/node_modules/
 dashboard/dist/
 dashboard/test-results/
 dashboard/playwright-report/
+demo/email_agent/.env.protected
+demo/email_agent/.outbox.jsonl
+deploy/.env
+demo/.venv/

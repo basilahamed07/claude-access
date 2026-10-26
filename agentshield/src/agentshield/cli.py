@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 
 from .db.migrate import migrate
@@ -19,6 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     db_sub.add_parser("upgrade")
     ep = db_sub.add_parser("ensure-partitions")
     ep.add_argument("--months-ahead", type=int, default=3)
+    db_sub.add_parser("create-logins", help="create the app/worker/retention login roles from AGENTSHIELD_*_PASSWORD (idempotent)")
     register_extra_commands(sub)
     args = parser.parse_args(argv)
     settings = get_settings()
@@ -26,6 +28,13 @@ def main(argv: list[str] | None = None) -> int:
         applied = asyncio.run(migrate(settings.owner_database_url))
         print("applied:", ", ".join(applied) or "nothing to do")
         return 0
+    if args.cmd == "db" and args.db_cmd == "create-logins":
+        from .db.logins import create_logins
+        pw = {"agentshield_app_login": os.environ.get("AGENTSHIELD_APP_PASSWORD", ""), "agentshield_worker_login": os.environ.get("AGENTSHIELD_WORKER_PASSWORD", ""),
+              "agentshield_retention_login": os.environ.get("AGENTSHIELD_RETENTION_PASSWORD", "")}
+        done = asyncio.run(create_logins(settings.owner_database_url, pw))
+        print("logins ready:", ", ".join(done) or "none (set AGENTSHIELD_APP_PASSWORD and AGENTSHIELD_WORKER_PASSWORD)")
+        return 0 if done else 1
     if args.cmd == "db" and args.db_cmd == "ensure-partitions":
         n = asyncio.run(ensure_partitions(settings.owner_database_url, args.months_ahead))
         print(f"created {n} partitions")

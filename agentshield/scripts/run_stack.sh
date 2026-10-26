@@ -21,19 +21,10 @@ asyncio.run(main(*sys.argv[1:]))
 PYEOF
 export AGENTSHIELD_OWNER_DATABASE_URL="$base/$DB"
 $PY -m agentshield.cli db upgrade >/dev/null
-$PY - "$AGENTSHIELD_OWNER_DATABASE_URL" <<'PYEOF'
-import asyncio, sys, asyncpg
-async def main(dsn):
-    c = await asyncpg.connect(dsn)
-    for login, group in [("as_app_login", "agentshield_app"), ("as_worker_login", "agentshield_worker")]:
-        if not await c.fetchval("select 1 from pg_roles where rolname=$1", login):
-            await c.execute(f"create role {login} login password 'pw' in role {group}")
-    await c.close()
-asyncio.run(main(sys.argv[1]))
-PYEOF
+AGENTSHIELD_APP_PASSWORD=pw AGENTSHIELD_WORKER_PASSWORD=pw $PY -m agentshield.cli db create-logins >/dev/null
 host=${base#*://}; host=${host#*@}
-export AGENTSHIELD_DATABASE_URL="postgresql+asyncpg://as_app_login:pw@${host}/$DB"
-export AGENTSHIELD_WORKER_DATABASE_URL="postgresql+asyncpg://as_worker_login:pw@${host}/$DB"
+export AGENTSHIELD_DATABASE_URL="postgresql+asyncpg://agentshield_app_login:pw@${host}/$DB"
+export AGENTSHIELD_WORKER_DATABASE_URL="postgresql+asyncpg://agentshield_worker_login:pw@${host}/$DB"
 export AGENTSHIELD_REDIS_URL="$REDIS" AGENTSHIELD_ENV=${AGENTSHIELD_ENV:-dev} AGENTSHIELD_COOKIE_SECURE=false
 export AGENTSHIELD_MASTER_KEY=${AGENTSHIELD_MASTER_KEY:-$($PY -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")}
 export AGENTSHIELD_KEY_PEPPER=${AGENTSHIELD_KEY_PEPPER:-$(head -c 32 /dev/urandom | base64)}
