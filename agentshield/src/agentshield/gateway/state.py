@@ -23,6 +23,7 @@ from ..scan.classifier import ClassifierHandle, load_classifier
 from ..scan.pipeline import ScanService
 from ..scan.rules import RuleStore
 from ..settings import Settings
+from ..tenants.safe_http import SafeTransport
 
 
 @dataclass
@@ -49,7 +50,8 @@ class AppState:
 
 
 async def init_state(app: FastAPI, settings: Settings) -> AppState:
-    http = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=5.0), follow_redirects=False)
+    http = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=5.0), follow_redirects=False,
+                             transport=SafeTransport(allow_private=settings.private_hosts))
     redis = aioredis.from_url(settings.redis_url, decode_responses=False)
     engine = create_engine(settings.database_url)
     emitter = Emitter(redis, Spool(settings.spool_dir))

@@ -38,6 +38,7 @@ class SampleMcp:
         self.calls: list[dict[str, Any]] = []
         self.requests: list[dict[str, Any]] = []
         self.require_token: str | None = None
+        self.result_override: dict[str, Any] | None = None       # replaces the tools/call result (non-text blocks, structuredContent)
         self.app = self._build()
 
     def _reply(self, body: dict[str, Any]) -> Response:
@@ -75,7 +76,8 @@ class SampleMcp:
                     text = f"Email sent to {(params.get('arguments') or {}).get('to')}."
                 else:
                     text = f"{name} ran."
-                return self._reply({"jsonrpc": "2.0", "id": rid, "result": {"content": [{"type": "text", "text": text}], "isError": False}})
+                result = self.result_override or {"content": [{"type": "text", "text": text}], "isError": False}
+                return self._reply({"jsonrpc": "2.0", "id": rid, "result": result})
             return self._reply({"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": f"unknown method {method}"}})
 
         return app

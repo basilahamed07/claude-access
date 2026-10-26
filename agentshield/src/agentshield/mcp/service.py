@@ -39,6 +39,7 @@ class McpService:
         self.engine, self.emitter, self.scanner = engine, emitter, scanner
         self._http_provider = http_provider          # callable returning the shared httpx client (tests swap it)
         self.master_key, self.allow_private, self.live_ttl = master_key, allow_private, live_ttl
+        self.unreachable_ttl = 5.0
         self._live: dict[tuple[str, str], tuple[float, str]] = {}
 
     def client(self, row: dict[str, Any]) -> McpClient:
@@ -132,6 +133,7 @@ class McpService:
             live = await self.client(row).list_tools()
         except McpError as exc:
             log.warning("could not check MCP server %s: %s", row["name"], exc)
+            self._live[key] = (time.monotonic() + self.unreachable_ttl, "unreachable")
             return "unreachable"
         status = "unchanged" if fingerprint(live) == bytes(row["approved_fingerprint"] or b"") else "drifted"
         if status == "drifted":

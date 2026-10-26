@@ -1,0 +1,52 @@
+# Known AI services. `domain` matches the host and any subdomain. `risk` is how sensitive the data usually is that people put in:
+# high (chat, code, meeting notes), medium (image, audio, writing), low (model hosting). Edit freely; a tenant's own decision
+# (approved / tolerated / blocked) is stored separately and always wins.
+services:
+  - { domain: chatgpt.com, vendor: OpenAI, category: chat, risk: high }
+  - { domain: chat.openai.com, vendor: OpenAI, category: chat, risk: high }
+  - { domain: openai.com, vendor: OpenAI, category: chat, risk: high }
+  - { domain: api.openai.com, vendor: OpenAI, category: api, risk: high }
+  - { domain: claude.ai, vendor: Anthropic, category: chat, risk: high }
+  - { domain: anthropic.com, vendor: Anthropic, category: chat, risk: high }
+  - { domain: api.anthropic.com, vendor: Anthropic, category: api, risk: high }
+  - { domain: gemini.google.com, vendor: Google, category: chat, risk: high }
+  - { domain: bard.google.com, vendor: Google, category: chat, risk: high }
+  - { domain: aistudio.google.com, vendor: Google, category: api, risk: high }
+  - { domain: generativelanguage.googleapis.com, vendor: Google, category: api, risk: high }
+  - { domain: copilot.microsoft.com, vendor: Microsoft, category: chat, risk: high }
+  - { domain: perplexity.ai, vendor: Perplexity, category: chat, risk: high }
+  - { domain: poe.com, vendor: Quora, category: chat, risk: high }
+  - { domain: character.ai, vendor: Character.AI, category: chat, risk: medium }
+  - { domain: chat.mistral.ai, vendor: Mistral, category: chat, risk: high }
+  - { domain: api.mistral.ai, vendor: Mistral, category: api, risk: high }
+  - { domain: cohere.com, vendor: Cohere, category: api, risk: high }
+  - { domain: api.cohere.ai, vendor: Cohere, category: api, risk: high }
+  - { domain: deepseek.com, vendor: DeepSeek, category: chat, risk: high }
+  - { domain: grok.com, vendor: xAI, category: chat, risk: high }
+  - { domain: x.ai, vendor: xAI, category: api, risk: high }
+  - { domain: meta.ai, vendor: Meta, category: chat, risk: high }
+  - { domain: pi.ai, vendor: Inflection, category: chat, risk: medium }
+  - { domain: you.com, vendor: You.com, category: chat, risk: medium }
+  - { domain: phind.com, vendor: Phind, category: code, risk: high }
+  - { domain: openrouter.ai, vendor: OpenRouter, category: api, risk: high }
+  - { domain: groq.com, vendor: Groq, category: api, risk: high }
+  - { domain: api.together.xyz, vendor: Together AI, category: api, risk: high }
+  - { domain: huggingface.co, vendor: Hugging Face, category: hosting, risk: low }
+  - { domain: replicate.com, vendor: Replicate, category: hosting, risk: medium }
+  - { domain: cursor.com, vendor: Cursor, category: code, risk: high }
+  - { domain: cursor.sh, vendor: Cursor, category: code, risk: high }
+  - { domain: codeium.com, vendor: Codeium, category: code, risk: high }
+  - { domain: tabnine.com, vendor: Tabnine, category: code, risk: high }
+  - { domain: replit.com, vendor: Replit, category: code, risk: high }
+  - { domain: bolt.new, vendor: StackBlitz, category: code, risk: high }
+  - { domain: v0.dev, vendor: Vercel, category: code, risk: high }
+  - { domain: lovable.dev, vendor: Lovable, category: code, risk: high }
+  - { domain: midjourney.com, vendor: Midjourney, category: image, risk: medium }
+  - { domain: stability.ai, vendor: Stability AI, category: image, risk: medium }
+  - { domain: runwayml.com, vendor: Runway, category: video, risk: medium }
+  - { domain: elevenlabs.io, vendor: ElevenLabs, category: audio, risk: medium }
+  - { domain: otter.ai, vendor: Otter.ai, category: meeting-notes, risk: high }
+  - { domain: fireflies.ai, vendor: Fireflies, category: meeting-notes, risk: high }
+  - { domain: jasper.ai, vendor: Jasper, category: writing, risk: medium }
+  - { domain: copy.ai, vendor: Copy.ai, category: writing, risk: medium }
+  - { domain: writesonic.com, vendor: Writesonic, category: writing, risk: medium }

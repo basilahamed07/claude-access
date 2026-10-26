@@ -84,8 +84,8 @@ async def mcp_endpoint(agent_slug: str, request: Request, ctx: TenantContext = D
     live = []
     for s in servers:
         s = {**s, "name": names[s["id"]]}
-        if await state.mcp.check_drift(ctx, s, use_cache=True) != "drifted":
-            live.append(s)                                   # a server that changed after approval is suspended and disappears
+        if await state.mcp.check_drift(ctx, s, use_cache=True) == "unchanged":
+            live.append(s)                                   # changed (suspended) or unreachable servers are unavailable: fail closed
     if method == "tools/list":
         tools = []
         for s in live:
@@ -142,16 +142,39 @@ async def _guard_result(state: Any, ctx: TenantContext, session: SessionRef, tra
     tcfg = await state.scanner.tenant_cfg(ctx.tenant_id)
     out: list[Any] = []
     verdicts: list[str] = []
-    for i, block in enumerate(result.get("content") or []):
-        if not (isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str)):
-            out.append(block)
-            continue
-        part = UntrustedPart(message_index=0, block_index=i, source=f"mcp:{server}", id=f"{tool}#{i}", text=block["text"])
-        res = await state.scanner.scan_content(ctx, trace_id=trace_id, session=session, source=part.source, content_id=part.id, text_=part.text)
+    withheld: list[str] = []
+
+    async def scan(text: str, idx: int) -> tuple[str, str]:
+        part = UntrustedPart(message_index=0, block_index=idx, source=f"mcp:{server}", id=f"{tool}#{idx}", text=text)
+        res = await state.scanner.scan_content(ctx, trace_id=trace_id, session=session, source=part.source, content_id=part.id, text_=text)
         verdicts.append(res.verdict)
-        text = res.sanitized_text if res.sanitized_text is not None else block["text"]
-        out.append({**block, "text": wrap(text, part, res.verdict) if tcfg.settings.mark_untrusted else text})
+        clean = res.sanitized_text if res.sanitized_text is not None else text
+        return (wrap(clean, part, res.verdict) if tcfg.settings.mark_untrusted else clean), res.verdict
+
+    for i, block in enumerate(result.get("content") or []):
+        kind = block.get("type") if isinstance(block, dict) else None
+        if kind == "text" and isinstance(block.get("text"), str):
+            text, _ = await scan(block["text"], i)
+            out.append({**block, "text": text})
+        elif kind == "resource" and isinstance(block.get("resource"), dict) and isinstance(block["resource"].get("text"), str) and "blob" not in block["resource"]:
+            text, _ = await scan(block["resource"]["text"], i)
+            out.append({**block, "resource": {**block["resource"], "text": text}})
+        else:                                               # images, audio, links, binary resources, unknown types: nothing here can be scanned, so none are passed on
+            withheld.append(str(kind))
+            out.append({"type": "text", "text": f"[AgentShield withheld a '{kind}' block from {server}: its content cannot be scanned for injected instructions]"})
+    guarded = {**result, "content": out}
+    if "structuredContent" in result:
+        try:
+            dumped = json.dumps(result["structuredContent"], ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            dumped, withheld = "", [*withheld, "structuredContent"]
+        if dumped:
+            _, verdict = await scan(dumped, len(out))
+            if verdict != "clean":
+                withheld.append("structuredContent")
+        if "structuredContent" in withheld:
+            guarded.pop("structuredContent", None)
     await state.emitter.emit(make_event(ctx, trace_id, "mcp", EventType.mcp_tool_call, f"{server}__{tool} forwarded", session=session, decision=Decision.allow,
                                         severity="high" if "malicious" in verdicts else "info"),
-                             {"server": server, "tool": tool, "forwarded": True, "result_verdicts": verdicts, "is_error": bool(result.get("isError"))})
-    return {**result, "content": out}
+                             {"server": server, "tool": tool, "forwarded": True, "result_verdicts": verdicts, "withheld": withheld, "is_error": bool(result.get("isError"))})
+    return guarded
