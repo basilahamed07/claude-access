@@ -35,7 +35,12 @@ export AGENTSHIELD_SESSION_SECRET=${AGENTSHIELD_SESSION_SECRET:-$(head -c 32 /de
 export AGENTSHIELD_SPOOL_DIR=${AGENTSHIELD_SPOOL_DIR:-$(mktemp -d)}
 $PY -c "import redis; redis.Redis.from_url('$REDIS').flushdb()"
 $PY -m agentshield.cli seed-demo --password "${STACK_DEMO_PASSWORD:-demo-password-123}" >/dev/null
+# No `exec`: the shell must outlive uvicorn so that its trap can stop the worker (an orphaned worker keeps consuming the audit stream).
 $PY -m agentshield.cli worker &
 WORKER=$!
-trap 'kill $WORKER 2>/dev/null || true' EXIT
-exec $PY -m uvicorn agentshield.gateway.app:create_app --factory --host 127.0.0.1 --port "$PORT" --log-level warning
+$PY -m uvicorn agentshield.gateway.app:create_app --factory --host 127.0.0.1 --port "$PORT" --log-level warning &
+API=$!
+trap 'kill $WORKER $API 2>/dev/null || true' EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+wait $API
