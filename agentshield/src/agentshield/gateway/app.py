@@ -16,6 +16,7 @@ from .routes import (
     admin_agents,
     admin_events,
     admin_policies,
+    admin_scan_rules,
     admin_settings,
     admin_upstreams,
     admin_users,
@@ -59,6 +60,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)
-    for module in (health, auth, check, approvals, proxy, admin_events, admin_agents, admin_policies, admin_upstreams, admin_users, admin_settings):
+    for module in (health, auth, check, approvals, proxy, admin_events, admin_agents, admin_policies, admin_scan_rules, admin_upstreams, admin_users, admin_settings):
         app.include_router(module.router)
     return app

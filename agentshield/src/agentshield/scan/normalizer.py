@@ -36,6 +36,12 @@ HOMOGLYPHS = {   # Cyrillic / Greek look-alikes -> Latin
     "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T", "Χ": "X",
 }
 HIDDEN_TAGS = {"script", "style", "template"}
+KNOWN_TAGS = set("""a abbr acronym address area article aside audio b base bdi bdo big blockquote body br button canvas caption
+center cite code col colgroup data datalist dd del details dfn dialog div dl dt em embed fieldset figcaption figure font footer
+form frame frameset h1 h2 h3 h4 h5 h6 head header hgroup hr html i iframe img input ins kbd label legend li link main map mark
+menu meta meter nav noframes noscript object ol optgroup option output p param picture pre progress q rp rt ruby s samp script
+section select slot small source span strike strong style sub summary sup table tbody td template textarea tfoot th thead time
+title tr track tt u ul var video wbr""".split())
 VOID = {"br", "img", "input", "meta", "link", "hr", "area", "base", "col", "embed", "source", "track", "wbr"}
 _B64 = re.compile(r"(?<![A-Za-z0-9+/_=-])[A-Za-z0-9+/_-]{24,}={0,2}(?![A-Za-z0-9+/_-])")
 _HEX = re.compile(r"(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}){12,}(?![0-9A-Fa-f])")
@@ -152,7 +158,18 @@ class _HtmlSplitter(HTMLParser):
             return "css_white_text"
         return None
 
+    def _raw_tag(self) -> tuple[str, int]:
+        pos = self._pos()
+        end = self.src.find(">", pos)
+        end = len(self.src) if end == -1 else end + 1
+        return self.src[pos:end], pos
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag not in KNOWN_TAGS:                       # <system>, <instructions>... is text, not markup
+            raw, pos = self._raw_tag()
+            self.kinds.add("pseudo_tags")
+            self._emit(raw, pos)
+            return
         if tag in VOID:
             return
         why = self._is_hidden(tag, attrs)
@@ -161,9 +178,17 @@ class _HtmlSplitter(HTMLParser):
         self.stack.append((tag, bool(why) or self._hidden_now()))
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        return
+        if tag not in KNOWN_TAGS:
+            raw, pos = self._raw_tag()
+            self.kinds.add("pseudo_tags")
+            self._emit(raw, pos)
 
     def handle_endtag(self, tag: str) -> None:
+        if tag not in KNOWN_TAGS:
+            raw, pos = self._raw_tag()
+            self.kinds.add("pseudo_tags")
+            self._emit(raw, pos)
+            return
         for i in range(len(self.stack) - 1, -1, -1):
             if self.stack[i][0] == tag:
                 del self.stack[i:]

@@ -18,6 +18,7 @@ from ..policy.cache import PolicyCache
 from ..policy.decide import PolicyEnforcer
 from ..proxy.pipeline import JudgeFactory
 from ..proxy.upstream import UpstreamClient
+from ..scan.rules import RuleStore
 from ..settings import Settings
 
 
@@ -33,6 +34,7 @@ class AppState:
     policies: PolicyCache
     enforcer: PolicyEnforcer
     approvals: ApprovalsService
+    rules: RuleStore
     pepper: bytes
     master_key: bytes
     jwt_secret: str
@@ -61,6 +63,7 @@ async def init_state(app: FastAPI, settings: Settings) -> AppState:
         policies=policies,
         enforcer=enforcer,
         approvals=approvals,
+        rules=RuleStore(refresh_seconds=settings.rules_refresh_seconds),
         http=http,
         upstream=UpstreamClient(http, allow_private=settings.private_hosts, max_bytes=settings.upstream_max_bytes),
         pepper=settings.pepper_bytes,

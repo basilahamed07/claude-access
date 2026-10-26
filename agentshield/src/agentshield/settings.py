@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     proxy_max_body_bytes: int = 2 * 1024 * 1024
     scan_max_item_bytes: int = 1_000_000
     upstream_max_bytes: int = 10 * 1024 * 1024
+    rules_refresh_seconds: float = 60.0
     dashboard_url: str = "http://localhost:5173"
     approval_sweep_seconds: float = 10.0
     approval_ttl_seconds: int = 300

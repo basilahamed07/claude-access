@@ -289,3 +289,21 @@ class AgentApprovalRead(Out):
     decision: Literal["allow", "block", "ask"]
     expires_at: datetime
     decided_at: datetime | None = None
+
+
+# ── scan rules ──────────────────────────────────────────────────────────────────────────────────
+class ScanRulesPut(In):
+    yaml: str = Field(min_length=1, max_length=300_000)
+
+
+class ScanRuleRead(Out):
+    id: str
+    category: str
+    weight: float
+    description: str = ""
+    source: Literal["default", "tenant"]
+
+
+class ScanRulesRead(Out):
+    version: str
+    rules: list[ScanRuleRead]
