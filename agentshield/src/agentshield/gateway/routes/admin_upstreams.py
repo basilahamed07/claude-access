@@ -101,7 +101,7 @@ async def test_upstream(upstream_id: UUID, request: Request, body: UpstreamTestR
                          api_key=None, model_map=row["model_map"] or {}, judge_model=row["judge_model"])
     model = (body.model if body else None) or cfg.judge_model
     if not model and cfg.model_map:
-        first: Any = next(iter(cfg.model_map.values()))
+        first: Any = cfg.model_map[sorted(cfg.model_map)[0]]        # JSONB has no key order: pick deterministically
         model = first.get("model") if isinstance(first, dict) else None
     if not model:
         raise ApiError("validation_failed", "Provide a model: none is configured on this upstream",

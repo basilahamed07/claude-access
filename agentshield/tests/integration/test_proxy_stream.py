@@ -25,9 +25,10 @@ def block_send(app):
         return judge
 
     state = app.state.s
+    original = state.judge_factory
     state.judge_factory = factory
     yield calls
-    state.judge_factory = None
+    state.judge_factory = original
 
 
 async def stream_text(client, url, body, headers):
@@ -98,13 +99,14 @@ async def test_judge_factory_receives_session_and_user_request(world, stub, app)
             return ALLOW
         return judge
 
+    original = app.state.s.judge_factory
     app.state.s.judge_factory = factory
     try:
         stub.queue.append(SEND)
         r = await world.api.client().post("/v1/chat/completions", json=OA,
                                           headers=world.oa(**{"X-AgentShield-Session": "s-77"}))
     finally:
-        app.state.s.judge_factory = None
+        app.state.s.judge_factory = original
     assert seen["session"] == "s-77" and seen["user_request"] == "go" and seen["mode"] == "monitor"
     assert seen["trace"] == r.headers["x-agentshield-trace"]
     assert json.loads(r.content)["choices"][0]["message"]["tool_calls"]

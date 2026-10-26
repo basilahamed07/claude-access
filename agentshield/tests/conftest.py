@@ -326,12 +326,56 @@ class ProxyWorld:
 async def world(api: Api, stub: StubUpstream) -> ProxyWorld:
     acct = await api.signup()
     await acct.make_upstream("oa", kind="openai", base_url="https://api.openai.com/v1", api_key="sk-provider-openai",
-                             model_map={"fast": {"model": "gpt-4.1-mini"}})
+                             model_map={"fast": {"model": "gpt-4.1-mini"},
+                                        "gpt-4.1": {"model": "gpt-4.1", "input_micro_usd_per_mtok": 2_000_000,
+                                                    "output_micro_usd_per_mtok": 8_000_000}})
+    price = {"input_micro_usd_per_mtok": 3_000_000, "output_micro_usd_per_mtok": 15_000_000}
     up_an = await acct.make_upstream("an", kind="anthropic", base_url="https://api.anthropic.com",
-                                     api_key="sk-ant-provider")
+                                     api_key="sk-ant-provider",
+                                     model_map={"claude-x": {"model": "claude-x", **price}, "m": {"model": "m", **price}})
     up_oa = (await acct.get("/v1/admin/upstreams")).json()
     oa_id = next(u["id"] for u in up_oa if u["name"] == "oa")
     await acct.make_agent("oa-agent", upstream_id=oa_id)
     await acct.make_agent("an-agent", upstream_id=up_an["id"])
     k1, k2 = await acct.make_key("oa-agent"), await acct.make_key("an-agent")
     return ProxyWorld(acct, k1["key"], k2["key"], api)
+
+
+# ── helpers used by several suites ───────────────────────────────────────────────────────────────
+import json as _json  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
+from agentshield.audit.worker import AuditWorker  # noqa: E402
+
+POLICY_SAMPLE = (_Path(__file__).resolve().parent / "fixtures" / "policies" / "email_reader.yaml").read_text()
+
+
+async def drain(worker: AuditWorker) -> int:
+    total = 0
+    while n := await worker.process_once():
+        total += n
+    return total
+
+
+async def set_policy(acct: Account, slug: str, yaml_text: str | None = None, *, mode: str = "enforce") -> None:
+    """Create + activate a policy version for `slug` and set its mode."""
+    text = (yaml_text or POLICY_SAMPLE).replace("agent: email-reader-01\n", "")
+    r = await acct.post(f"/v1/admin/agents/{slug}/policy/versions", {"yaml": text})
+    assert r.status_code == 201, r.text
+    etag = (await acct.get(f"/v1/admin/agents/{slug}")).headers["etag"]
+    r = await acct.post(f"/v1/admin/agents/{slug}/policy/versions/{r.json()['version']}/activate", headers={"If-Match": etag})
+    assert r.status_code == 200, r.text
+    etag = (await acct.get(f"/v1/admin/agents/{slug}")).headers["etag"]
+    r = await acct.patch(f"/v1/admin/agents/{slug}", {"mode": mode}, headers={"If-Match": etag})
+    assert r.status_code == 200, r.text
+
+
+async def events_of(acct: Account, worker: AuditWorker, **params: str) -> list[dict[str, Any]]:
+    await drain(worker)
+    qs = "&".join(f"{k}={v}" for k, v in params.items())
+    r = await acct.get(f"/v1/admin/events?limit=200&include_payload=true&{qs}")
+    assert r.status_code == 200, r.text
+    return list(reversed(r.json()["items"]))
+
+
+_ = _json

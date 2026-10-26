@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     classifier_dir: str = ""
     rules_path: str = ""
 
+    default_rpm: int = 600            # model requests per minute per agent unless the policy sets max_rpm
+    check_rpm: int = 1200             # /v1/check and /v1/scan requests per minute per agent
     proxy_max_body_bytes: int = 2 * 1024 * 1024
     scan_max_item_bytes: int = 1_000_000
     upstream_max_bytes: int = 10 * 1024 * 1024

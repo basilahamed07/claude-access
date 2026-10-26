@@ -22,6 +22,7 @@ class ProxyCall:
     agent: dict[str, Any]          # slug, mode, risk_tier, active_policy_version, ...
     api: Literal["anthropic", "openai"]
     user_request: str | None
+    budget_unavailable: bool = False
 
 
 JudgeFactory = Callable[[ProxyCall], ToolJudge]

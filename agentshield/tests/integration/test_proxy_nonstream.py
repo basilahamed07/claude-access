@@ -162,7 +162,7 @@ async def test_suspended_agent_and_agent_without_upstream(world):
 
 async def test_models_endpoint_lists_aliases(world):
     r = await world.api.client().get("/v1/models", headers=world.oa())
-    assert r.json() == {"object": "list", "data": [{"id": "fast", "object": "model", "owned_by": "agentshield"}]}
+    assert [m["id"] for m in r.json()["data"]] == ["fast", "gpt-4.1"] and r.json()["object"] == "list"
 
 
 async def test_jwt_works_on_the_proxy(world, stub):
@@ -215,6 +215,7 @@ async def test_upstream_connection_test_never_returns_provider_body(world, stub)
     assert r.json()["ok"] is False and r.json()["error"] == "http_401" and "secret-echo" not in r.text
     an = next(u for u in ups if u["name"] == "an")
     r = await acct.post(f"/v1/admin/upstreams/{an['id']}/test", {})
-    assert r.status_code == 422      # no model configured on this upstream and none supplied
-    r = await acct.post(f"/v1/admin/upstreams/{an['id']}/test", {"model": "claude-x"})
-    assert r.json()["ok"] is True
+    assert r.json()["ok"] is True and stub.requests[-1].body["model"] == "claude-x"     # first mapped model
+    bare = await acct.make_upstream("bare", kind="anthropic", base_url="https://api.anthropic.com")
+    assert (await acct.post(f"/v1/admin/upstreams/{bare['id']}/test", {})).status_code == 422   # no model anywhere
+    assert (await acct.post(f"/v1/admin/upstreams/{bare['id']}/test", {"model": "claude-x"})).json()["ok"] is True

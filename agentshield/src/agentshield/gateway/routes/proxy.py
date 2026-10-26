@@ -18,6 +18,7 @@ from ...contracts.errors import ApiError
 from ...contracts.events import EventType
 from ...contracts.ids import new_trace_id
 from ...db.tenant_tx import tenant_tx
+from ...policy.budgets import BudgetStatus, BudgetUnavailable, price_micro_usd
 from ...proxy.anthropic_stream import rewrite_anthropic, rewrite_anthropic_message
 from ...proxy.openai_stream import rewrite_openai, rewrite_openai_message
 from ...proxy.pipeline import ProxyCall
@@ -107,8 +108,32 @@ async def handle_proxy(request: Request, ctx: TenantContext, api: Api) -> Respon
     cfg = UpstreamConfig(id=str(row["upstream_id"]), name=row["upstream_name"], kind=row["kind"],
                          base_url=row["base_url"], api_key=None, model_map=row["model_map"] or {},
                          judge_model=row["judge_model"])
-    upstream_model, _entry = cfg.resolve_model(str(body["model"]))
+    upstream_model, price_entry = cfg.resolve_model(str(body["model"]))
     untrusted_parts = extract_untrusted(api, body)
+    budget_unavailable, admitted = False, None
+    try:
+        policy = await state.policies.get(state.engine, ctx.tenant_id, row["agent_id"], row["active_policy_version"])
+        budgets = policy.doc.budgets
+    except Exception:                                              # noqa: BLE001  (decisions will fail closed too)
+        budgets = None
+        await state.emitter.emit(make_event(ctx, trace_id, "gateway", EventType.error,
+                                            "active policy could not be loaded: tool calls fail closed",
+                                            session=session, severity="high"), {"component": "policy"})
+    try:
+        admitted = await state.budgets.admit(ctx.tenant_id, row["slug"], budgets)
+    except BudgetUnavailable:
+        budget_unavailable = True
+        await state.emitter.emit(make_event(ctx, trace_id, "gateway", EventType.error,
+                                            "budget service unavailable: only read-only tools are allowed",
+                                            session=session, severity="high"), {"component": "budgets"})
+    if admitted is not None and not admitted.ok:
+        await state.emitter.emit(
+            make_event(ctx, trace_id, "gateway", EventType.budget_exceeded, admitted.message(), session=session,
+                       rule_id=f"budget:{admitted.exceeded}", severity="medium"),
+            {"limit": admitted.exceeded, "retry_after": admitted.retry_after})
+        code = "rate_limited" if admitted.exceeded == "rpm" else "budget_exceeded"
+        raise ApiError(code, admitted.message(), headers={"Retry-After": str(admitted.retry_after)})
+    limit_headers = _limit_headers(admitted)
     out_body = {**body, "model": upstream_model}
     request.state.session = session
     trace_header = {"X-AgentShield-Trace": trace_id, "X-AgentShield-Session": session.key}
@@ -122,7 +147,8 @@ async def handle_proxy(request: Request, ctx: TenantContext, api: Api) -> Respon
     judge: ToolJudge = allow_all
     if state.judge_factory is not None:
         judge = state.judge_factory(ProxyCall(request=request, ctx=ctx, session=session, trace_id=trace_id,
-                                              agent=row, api=api, user_request=user_request))
+                                              agent=row, api=api, user_request=user_request,
+                                              budget_unavailable=budget_unavailable))
 
     if body.get("stream") is True:
         resp = await state.upstream.open_stream(cfg, api, out_body, headers, api_key)
@@ -143,9 +169,11 @@ async def handle_proxy(request: Request, ctx: TenantContext, api: Api) -> Respon
                     make_event(ctx, trace_id, "gateway", EventType.model_response,
                                f"stream finished (stop_reason={obs.usage.stop_reason})", session=session),
                     {"status": 200, "stream": True, **obs.usage.as_payload()})
+                await _record_usage(state, ctx, trace_id, session, row["slug"], price_entry, obs.usage)
 
         return StreamingResponse(observed(), media_type="text/event-stream",
-                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", **trace_header})
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", **trace_header,
+                                          **limit_headers})
 
     resp = await state.upstream.complete(cfg, api, out_body, headers, api_key)
     if resp.status_code >= 400:
@@ -166,8 +194,36 @@ async def handle_proxy(request: Request, ctx: TenantContext, api: Api) -> Respon
             make_event(ctx, trace_id, "gateway", EventType.model_response,
                        f"response (stop_reason={usage.stop_reason})", session=session),
             {"status": resp.status_code, "stream": False, "rewritten": changed, **usage.as_payload()})
+        await _record_usage(state, ctx, trace_id, session, row["slug"], price_entry, usage)
     return Response(content, status_code=resp.status_code, media_type=media_type,
-                    headers={**_echo(resp.headers), **trace_header})
+                    headers={**_echo(resp.headers), **trace_header, **limit_headers})
+
+
+def _limit_headers(status: BudgetStatus | None) -> dict[str, str]:
+    if status is None or not status.ok or status.rpm_remaining < 0:
+        return {}
+    return {"RateLimit-Limit": str(status.rpm_limit), "RateLimit-Remaining": str(status.rpm_remaining),
+            "RateLimit-Reset": "60"}
+
+
+async def _record_usage(state: Any, ctx: TenantContext, trace_id: str, session: Any, slug: str,
+                        price_entry: dict[str, Any] | None, usage: Any) -> None:
+    """Record tokens/cost for the daily budget. Never raises (a counting hiccup must not fail the request)."""
+    try:
+        cost, missing = price_micro_usd(price_entry, usage.input_tokens, usage.output_tokens)
+        await state.budgets.record(ctx.tenant_id, slug, usage.input_tokens + usage.output_tokens, cost)
+        if missing:
+            day = __import__("datetime").datetime.now(__import__("datetime").UTC).strftime("%Y%m%d")
+            if await state.redis.set(f"pricewarn:{ctx.tenant_id}:{slug}:{day}", "1", ex=86400, nx=True):
+                await state.emitter.emit(
+                    make_event(ctx, trace_id, "gateway", EventType.budget_price_missing,
+                               "no price configured for this model; cost budgets cannot be enforced", session=session,
+                               severity="low"), {"agent": slug})
+    except BudgetUnavailable:
+        pass
+    except Exception:                                              # noqa: BLE001
+        import logging
+        logging.getLogger("agentshield").exception("could not record usage")
 
 
 def _error_passthrough(request: Request, api: Api, status: int, data: bytes, resp_headers: Any,

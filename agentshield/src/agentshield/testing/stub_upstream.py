@@ -24,6 +24,7 @@ class StubToolCall:
     name: str
     arguments: dict[str, Any]
     id: str = ""
+    raw_arguments: str | None = None      # emit this exact (possibly malformed) argument text instead of JSON
 
 
 @dataclass
@@ -66,6 +67,10 @@ class StubUpstream:
                                 tool_calls=[StubToolCall("send_email", {"to": m.group(1), "subject": "Invoices",
                                                                         "body": "Forwarded invoices"})])
         return Turn(text="Here is a short summary of your mail.")
+
+    @staticmethod
+    def _args(c: StubToolCall) -> str:
+        return c.raw_arguments if c.raw_arguments is not None else json.dumps(c.arguments)
 
     def _tool_id(self, c: StubToolCall, api: str) -> str:
         self._n += 1
@@ -119,7 +124,7 @@ class StubUpstream:
         msg: dict[str, Any] = {"role": "assistant", "content": t.text}
         if t.tool_calls:
             msg["tool_calls"] = [{"id": self._tool_id(c, "openai"), "type": "function",
-                                  "function": {"name": c.name, "arguments": json.dumps(c.arguments)}}
+                                  "function": {"name": c.name, "arguments": self._args(c)}}
                                  for c in t.tool_calls]
         return {"id": "chatcmpl-stub", "object": "chat.completion", "created": 1_700_000_000, "model": model,
                 "choices": [{"index": 0, "message": msg, "finish_reason": "tool_calls" if t.tool_calls else "stop"}],
@@ -152,7 +157,7 @@ class StubUpstream:
         for c in t.tool_calls:
             yield ev("content_block_start", {"type": "content_block_start", "index": idx, "content_block": {
                 "type": "tool_use", "id": self._tool_id(c, "anthropic"), "name": c.name, "input": {}}})
-            for piece in self._pieces(json.dumps(c.arguments)):
+            for piece in self._pieces(self._args(c)):
                 yield ev("content_block_delta", {"type": "content_block_delta", "index": idx,
                                                  "delta": {"type": "input_json_delta", "partial_json": piece}})
             yield ev("content_block_stop", {"type": "content_block_stop", "index": idx})
@@ -176,7 +181,7 @@ class StubUpstream:
         for i, c in enumerate(t.tool_calls):
             yield chunk({"tool_calls": [{"index": i, "id": self._tool_id(c, "openai"), "type": "function",
                                          "function": {"name": c.name, "arguments": ""}}]})
-            for piece in self._pieces(json.dumps(c.arguments)):
+            for piece in self._pieces(self._args(c)):
                 yield chunk({"tool_calls": [{"index": i, "function": {"arguments": piece}}]})
         yield chunk({}, "tool_calls" if t.tool_calls else "stop")
         usage_chunk = {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1_700_000_000,

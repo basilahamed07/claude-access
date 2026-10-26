@@ -21,6 +21,7 @@ local budget, rpm, rpm_seq = KEYS[1], KEYS[2], KEYS[3]
 local now = tonumber(ARGV[1])
 local rpm_limit, calls_limit = tonumber(ARGV[2]), tonumber(ARGV[3])
 local tokens_limit, cost_limit, ttl = tonumber(ARGV[4]), tonumber(ARGV[5]), tonumber(ARGV[6])
+local count_call = ARGV[7] == '1'
 if tokens_limit > 0 and tonumber(redis.call('HGET', budget, 'tokens') or '0') >= tokens_limit then return {'tokens', 0, 0} end
 if cost_limit > 0 and tonumber(redis.call('HGET', budget, 'cost') or '0') >= cost_limit then return {'cost', 0, 0} end
 if calls_limit > 0 and tonumber(redis.call('HGET', budget, 'calls') or '0') >= calls_limit then return {'calls', 0, 0} end
@@ -38,8 +39,10 @@ if rpm_limit > 0 then
   redis.call('EXPIRE', rpm, 120)
   redis.call('EXPIRE', rpm_seq, 120)
 end
-redis.call('HINCRBY', budget, 'calls', 1)
-redis.call('EXPIRE', budget, ttl)
+if count_call then
+  redis.call('HINCRBY', budget, 'calls', 1)
+  redis.call('EXPIRE', budget, ttl)
+end
 return {'', 0, rpm_limit > 0 and (rpm_limit - count - 1) or -1}
 """
 
@@ -95,18 +98,23 @@ class BudgetTracker:
         return f"budget:{tenant_id}:{agent_slug}:{day}"
 
     async def admit(self, tenant_id: Any, agent_slug: str, budgets: Budgets | None, *,
-                    now: datetime | None = None, now_ms: int | None = None) -> BudgetStatus:
-        """Count one request against rpm and daily calls; refuse when any limit is already reached."""
+                    now: datetime | None = None, now_ms: int | None = None, scope: str = "",
+                    count_call: bool = True, default_rpm: int | None = None) -> BudgetStatus:
+        """Count one request against rpm and daily calls; refuse when any limit is already reached.
+
+        `scope` separates the rate-limit window of another API (e.g. "check") from model requests;
+        `count_call=False` rate-limits without consuming the daily call budget."""
         b = budgets or Budgets()
         now = now or datetime.now(UTC)
         ms = now_ms if now_ms is not None else int(now.timestamp() * 1000)
-        rpm_limit = b.max_rpm or self.default_rpm
+        rpm_limit = b.max_rpm or default_rpm or self.default_rpm
         cost_limit = round((b.max_cost_usd_per_day or 0) * 1_000_000)
         try:
             exceeded, retry, remaining = await self._admit(
-                keys=[self.budget_key(tenant_id, agent_slug, _day(now)), f"rpm:{tenant_id}:{agent_slug}",
-                      f"rpmseq:{tenant_id}:{agent_slug}"],
-                args=[ms, rpm_limit, b.max_calls_per_day or 0, b.max_tokens_per_day or 0, cost_limit, BUDGET_TTL])
+                keys=[self.budget_key(tenant_id, agent_slug, _day(now)), f"rpm:{tenant_id}:{agent_slug}{scope}",
+                      f"rpmseq:{tenant_id}:{agent_slug}{scope}"],
+                args=[ms, rpm_limit, b.max_calls_per_day or 0, b.max_tokens_per_day or 0, cost_limit, BUDGET_TTL,
+                      "1" if count_call else "0"])
         except Exception as exc:                                    # noqa: BLE001
             raise BudgetUnavailable(str(exc)) from exc
         ex = exceeded.decode() if isinstance(exceeded, bytes) else exceeded
