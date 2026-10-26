@@ -82,3 +82,16 @@ async def test_unresolvable_hosts_are_a_connect_error_not_a_crash():
         raise OSError("nxdomain")
     with pytest.raises(httpx.ConnectError):
         await get(SafeTransport(resolver=fail), "http://nope.example/")
+
+
+@pytest.mark.parametrize("addr", ["100.64.0.1", "100.127.255.254", "64:ff9b::7f00:1", "64:ff9b::a00:1", "64:ff9b:1::a00:1", "2002:7f00:1::1", "2002:a9fe:a9fe::1",
+                                  "2001:0:4136:e378:8000:63bf:3fff:fdd2", "::ffff:169.254.169.254", "192.0.0.1", "198.18.0.1", "fc00::1", "fe80::1", "0.0.0.0", "224.0.0.1"])
+def test_non_global_and_tunnelled_private_addresses_are_not_public(addr):
+    from agentshield.tenants.urls import _is_public
+    assert _is_public(addr) is False
+
+
+@pytest.mark.parametrize("addr", ["93.184.216.34", "8.8.8.8", "2606:2800:220:1:248:1893:25c8:1946", "64:ff9b::808:808"])
+def test_ordinary_public_addresses_still_pass(addr):
+    from agentshield.tenants.urls import _is_public
+    assert _is_public(addr) is True

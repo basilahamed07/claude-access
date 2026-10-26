@@ -168,6 +168,7 @@ ALERT_KINDS: dict[str, str] = {
     "approval_expired": "e.type = 'approval.decided' and e.reason like 'approval expired%'",
     "budget_exceeded": "e.type = 'budget.exceeded'",
     "audit_gap": "e.type = 'audit.gap'",
+    "shadow_ai": "e.type in ('shadow.tool_seen', 'shadow.dlp_hit', 'shadow.source_stale') and e.severity <> 'info'",
 }
 _ALERT_CASE = "case " + " ".join(f"when {cond} then '{kind}'" for kind, cond in ALERT_KINDS.items()) + " end"
 

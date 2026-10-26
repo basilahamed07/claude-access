@@ -25,12 +25,30 @@ def _default_resolver(host: str, port: int) -> list[str]:
     return [str(i[4][0]) for i in infos]
 
 
+_NAT64 = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64:ff9b:1::/48"))
+
+
+def _embedded_v4(ip: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
+    """The IPv4 address hidden inside an IPv6 one (mapped, NAT64, 6to4, Teredo), so it is checked as the IPv4 address it really is."""
+    if ip.ipv4_mapped is not None:
+        return ip.ipv4_mapped
+    if ip.sixtofour is not None:
+        return ip.sixtofour
+    if ip.teredo is not None:
+        return ip.teredo[1]
+    if any(ip in net for net in _NAT64):
+        return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return None
+
+
 def _is_public(addr: str) -> bool:
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address = ipaddress.ip_address(addr.split("%")[0])
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        ip = ip.ipv4_mapped
-    return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
-                or ip.is_reserved or ip.is_unspecified)
+    if isinstance(ip, ipaddress.IPv6Address):
+        v4 = _embedded_v4(ip)
+        if v4 is not None and not _is_public(str(v4)):
+            return False
+    # An allow-list, not a deny-list: only globally routable addresses pass (this also excludes 100.64.0.0/10 carrier-grade NAT).
+    return ip.is_global and not (ip.is_multicast or ip.is_unspecified or ip.is_loopback or ip.is_link_local)
 
 
 def validate_outbound_url(url: str, *, allow_private: set[str] | None = None,

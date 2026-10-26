@@ -47,6 +47,7 @@ def register_extra_commands(sub: argparse._SubParsersAction) -> None:  # type: i
     vc.add_argument("--tenant", required=True, help="tenant slug or id")
     sub.add_parser("worker", help="run the audit worker (consumes the event stream)")
     sub.add_parser("retention-run", help="purge old payloads and drop expired audit partitions")
+    sub.add_parser("shadow-check", help="raise shadow.source_stale for log sources that have gone quiet (run daily)")
     sd = sub.add_parser("seed-demo", help="create a demo tenant with an example attack (idempotent)")
     sd.add_argument("--password", help="password for the demo login (default: random, printed once)")
 
@@ -116,6 +117,33 @@ async def _retention() -> int:
     return 0
 
 
+async def _shadow_check() -> int:
+    import redis.asyncio as aioredis
+    from sqlalchemy import text
+
+    from .audit.emitter import Emitter
+    from .audit.spool import Spool
+    from .db.engine import create_engine
+    from .shadow.engine import ShadowService
+    from .tenants.context import TenantContext
+    s = get_settings()
+    engine = create_engine(s.owner_database_url, pool_size=2)
+    redis = aioredis.from_url(s.redis_url, decode_responses=False)
+    svc = ShadowService(engine=engine, redis=redis, emitter=Emitter(redis, Spool(s.spool_dir)), pepper=s.pepper_bytes)
+    stale = 0
+    try:
+        async with engine.connect() as conn:
+            tenants = [r[0] for r in (await conn.execute(text("select id from tenants"))).all()]
+        for tid in tenants:
+            ctx = TenantContext(tenant_id=tid, actor="user", actor_id=tid, role="admin", auth_method="session")
+            stale += len(await svc.check_stale(ctx))
+    finally:
+        await redis.aclose()
+        await engine.dispose()
+    print(f"{stale} stale log source(s) across {len(tenants)} tenant(s)")
+    return 0
+
+
 async def _seed_demo(password: str | None) -> int:
     from .demo.seed import seed_demo
     result = await seed_demo(get_settings(), password=password)
@@ -133,6 +161,8 @@ def run_extra_command(args: argparse.Namespace) -> int:
         return asyncio.run(_worker())
     if args.cmd == "retention-run":
         return asyncio.run(_retention())
+    if args.cmd == "shadow-check":
+        return asyncio.run(_shadow_check())
     if args.cmd == "seed-demo":
         return asyncio.run(_seed_demo(args.password))
     print(f"unknown command: {args.cmd}", file=sys.stderr)

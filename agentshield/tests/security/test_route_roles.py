@@ -43,7 +43,7 @@ def test_every_route_is_classified(app):
     unclassified = [f"{sorted(r.methods)} {r.path}" for r in api_routes(app)
                     if r.path not in PUBLIC_CONTROL and r.path not in DATA_PLANE
                     and not r.path.startswith("/v1/admin") and r.path != "/v1/auth/me"
-                    and not _is_agent_auth(r) and not r.path.startswith(("/openapi", "/docs"))]
+                    and not _is_agent_auth(r) and _required_role(r) is None and not r.path.startswith(("/openapi", "/docs"))]
     assert unclassified == []
 
 

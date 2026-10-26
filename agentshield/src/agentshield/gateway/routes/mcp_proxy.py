@@ -137,6 +137,9 @@ async def _call(state: Any, request: Request, ctx: TenantContext, row: dict[str,
     return _ok(rid, await _guard_result(state, ctx, session, trace_id, server["name"], tool, result))
 
 
+_KNOWN_BLOCKS = {"image", "audio", "resource_link", "resource"}
+
+
 async def _guard_result(state: Any, ctx: TenantContext, session: SessionRef, trace_id: str, server: str, tool: str, result: dict[str, Any]) -> dict[str, Any]:
     """Scan what a server returned before the agent reads it: hostile text is removed or withheld, the rest is marked as untrusted data."""
     tcfg = await state.scanner.tenant_cfg(ctx.tenant_id)
@@ -160,8 +163,9 @@ async def _guard_result(state: Any, ctx: TenantContext, session: SessionRef, tra
             text, _ = await scan(block["resource"]["text"], i)
             out.append({**block, "resource": {**block["resource"], "text": text}})
         else:                                               # images, audio, links, binary resources, unknown types: nothing here can be scanned, so none are passed on
-            withheld.append(str(kind))
-            out.append({"type": "text", "text": f"[AgentShield withheld a '{kind}' block from {server}: its content cannot be scanned for injected instructions]"})
+            label = kind if kind in _KNOWN_BLOCKS else "other"      # the type is server-supplied: never repeat it
+            withheld.append(label)
+            out.append({"type": "text", "text": f"[AgentShield withheld a '{label}' block from {server}: its content cannot be scanned for injected instructions]"})
     guarded = {**result, "content": out}
     if "structuredContent" in result:
         try:

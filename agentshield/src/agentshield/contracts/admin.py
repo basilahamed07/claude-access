@@ -444,7 +444,7 @@ class IncidentRead(Out):
 
 
 class AlertRead(Out):
-    kind: Literal["blocked_call", "malicious_content", "approval_expired", "budget_exceeded", "audit_gap"]
+    kind: Literal["blocked_call", "malicious_content", "approval_expired", "budget_exceeded", "audit_gap", "shadow_ai"]
     ts: datetime
     seq: int
     severity: str

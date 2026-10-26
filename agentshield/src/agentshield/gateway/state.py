@@ -23,6 +23,7 @@ from ..scan.classifier import ClassifierHandle, load_classifier
 from ..scan.pipeline import ScanService
 from ..scan.rules import RuleStore
 from ..settings import Settings
+from ..shadow.engine import ShadowService
 from ..tenants.safe_http import SafeTransport
 
 
@@ -42,6 +43,7 @@ class AppState:
     classifier: ClassifierHandle
     scanner: ScanService
     mcp: McpService
+    shadow: ShadowService
     pepper: bytes
     master_key: bytes
     jwt_secret: str
@@ -83,6 +85,7 @@ async def init_state(app: FastAPI, settings: Settings) -> AppState:
         classifier=classifier,
         scanner=scanner,
         mcp=mcp,
+        shadow=ShadowService(engine=engine, redis=redis, emitter=emitter, pepper=settings.pepper_bytes),
         http=http,
         upstream=upstream_client,
         pepper=settings.pepper_bytes,
