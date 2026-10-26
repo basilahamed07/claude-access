@@ -1,0 +1,24 @@
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"role": "assistant", "content": ""}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"content": "Here "}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"content": "is a "}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"content": "short"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"content": " summ"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"content": "ary o"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"content": "f you"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"content": "r mai"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"content": "l."}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [], "usage": {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18}}
+
+data: [DONE]
+

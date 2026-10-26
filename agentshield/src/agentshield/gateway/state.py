@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ..db.engine import create_engine
+from ..proxy.pipeline import JudgeFactory
 from ..proxy.upstream import UpstreamClient
 from ..settings import Settings
 
@@ -25,6 +26,7 @@ class AppState:
     master_key: bytes
     jwt_secret: str
     session_secret: str
+    judge_factory: JudgeFactory | None = None
 
 
 async def init_state(app: FastAPI, settings: Settings) -> AppState:

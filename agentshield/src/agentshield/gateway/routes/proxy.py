@@ -15,7 +15,11 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from ...contracts.errors import ApiError
 from ...contracts.ids import new_trace_id
 from ...db.tenant_tx import tenant_tx
+from ...proxy.anthropic_stream import rewrite_anthropic, rewrite_anthropic_message
+from ...proxy.openai_stream import rewrite_openai, rewrite_openai_message
+from ...proxy.pipeline import ProxyCall
 from ...proxy.sessions import SESSION_HEADER, USER_HEADER, first_user_message, session_key, upsert_session
+from ...proxy.tools import ToolJudge, allow_all
 from ...proxy.upstream import UpstreamConfig, api_matches_kind
 from ...tenants import registry
 from ...tenants.auth import agent_ctx
@@ -102,6 +106,10 @@ async def handle_proxy(request: Request, ctx: TenantContext, api: Api) -> Respon
     out_body = {**body, "model": upstream_model}
     request.state.session = session
     trace_header = {"X-AgentShield-Trace": trace_id, "X-AgentShield-Session": session.key}
+    judge: ToolJudge = allow_all
+    if state.judge_factory is not None:
+        judge = state.judge_factory(ProxyCall(request=request, ctx=ctx, session=session, trace_id=trace_id,
+                                              agent=row, api=api, user_request=user_request))
 
     if body.get("stream") is True:
         resp = await state.upstream.open_stream(cfg, api, out_body, headers, api_key)
@@ -109,14 +117,25 @@ async def handle_proxy(request: Request, ctx: TenantContext, api: Api) -> Respon
             data = await resp.aread()
             await resp.aclose()
             return _error_passthrough(request, api, resp.status_code, data, resp.headers, trace_header)
-        return StreamingResponse(state.upstream.iter_bytes(resp), media_type="text/event-stream",
+        rewrite = rewrite_anthropic if api == "anthropic" else rewrite_openai
+        return StreamingResponse(rewrite(state.upstream.iter_bytes(resp), judge), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", **trace_header})
 
     resp = await state.upstream.complete(cfg, api, out_body, headers, api_key)
     if resp.status_code >= 400:
         return _error_passthrough(request, api, resp.status_code, resp.content, resp.headers, trace_header)
-    return Response(resp.content, status_code=resp.status_code,
-                    media_type=resp.headers.get("content-type", "application/json"),
+    media_type = resp.headers.get("content-type", "application/json")
+    content = resp.content
+    try:
+        parsed = json.loads(content)
+    except ValueError:
+        parsed = None
+    if isinstance(parsed, dict):
+        rewrite_msg = rewrite_anthropic_message if api == "anthropic" else rewrite_openai_message
+        new_body, changed = await rewrite_msg(parsed, judge)
+        if changed:                                    # untouched answers stay byte-identical
+            content = json.dumps(new_body, separators=(",", ":")).encode()
+    return Response(content, status_code=resp.status_code, media_type=media_type,
                     headers={**_echo(resp.headers), **trace_header})
 
 

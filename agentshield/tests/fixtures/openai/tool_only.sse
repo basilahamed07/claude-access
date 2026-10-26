@@ -1,0 +1,42 @@
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"role": "assistant", "content": ""}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "id": "T1", "type": "function", "function": {"name": "send_email", "arguments": ""}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "{\"to\""}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": ": \"x@"}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "unkno"}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "wn.co"}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "m\", \""}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "subje"}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "ct\": "}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "\"Invo"}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "ices\""}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": ", \"bo"}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "dy\": "}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "\"Secr"}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "et in"}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "voice"}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": " data"}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "\"}"}}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]}
+
+data: {"id": "chatcmpl-stub", "object": "chat.completion.chunk", "created": 1700000000, "model": "m", "choices": [], "usage": {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18}}
+
+data: [DONE]
+
