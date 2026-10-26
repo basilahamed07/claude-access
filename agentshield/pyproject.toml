@@ -25,6 +25,7 @@ dependencies = [
   "pyjwt>=2.9",
   "python-ulid>=2.7",
   "python-multipart>=0.0.9",
+  "regex>=2024.7.24",
   "email-validator>=2.2",
   "prometheus-client>=0.20",
   "opentelemetry-api>=1.26",
@@ -77,7 +78,7 @@ mypy_path = "src"
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["asyncpg.*", "onnxruntime.*", "tokenizers.*", "fakeredis.*", "argon2.*", "jwt.*", "ulid.*", "prometheus_client.*"]
+module = ["regex.*", "asyncpg.*", "onnxruntime.*", "tokenizers.*", "fakeredis.*", "argon2.*", "jwt.*", "ulid.*", "prometheus_client.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

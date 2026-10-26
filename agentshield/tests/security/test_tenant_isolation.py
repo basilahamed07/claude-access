@@ -29,6 +29,10 @@ ROUTES = [
     ("PATCH", "/v1/admin/upstreams/{upstream_id}", {"name": "pwned"}),
     ("DELETE", "/v1/admin/upstreams/{upstream_id}", None),
     ("PATCH", "/v1/admin/users/{user_id}", {"role": "viewer"}),
+    ("GET", "/v1/admin/agents/{slug}/policy/versions", None),
+    ("POST", "/v1/admin/agents/{slug}/policy/versions", {"yaml": "version: 1\n"}),
+    ("GET", "/v1/admin/agents/{slug}/policy/versions/1", None),
+    ("POST", "/v1/admin/agents/{slug}/policy/versions/1/activate", {}),
 ]
 
 
@@ -36,7 +40,7 @@ ROUTES = [
 async def test_foreign_ids_return_404(world, method, path, body):
     a, b, ids = world
     url = path.format(**ids)
-    headers = {"If-Match": "*"} if method == "PATCH" and "agents" in path else {}
+    headers = {"If-Match": "*"} if ("agents" in path and method in {"PATCH", "POST"}) else {}
     r = await a.client.request(method, url, json=body, headers={**a.h, **headers})
     assert r.status_code == 404, (url, r.status_code, r.text)
     # and the victim's data is untouched

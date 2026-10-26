@@ -14,6 +14,7 @@ from .idempotency import IdempotencyMiddleware
 from .routes import (
     admin_agents,
     admin_events,
+    admin_policies,
     admin_settings,
     admin_upstreams,
     admin_users,
@@ -51,6 +52,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)
-    for module in (health, auth, proxy, admin_events, admin_agents, admin_upstreams, admin_users, admin_settings):
+    for module in (health, auth, proxy, admin_events, admin_agents, admin_policies, admin_upstreams, admin_users, admin_settings):
         app.include_router(module.router)
     return app

@@ -241,3 +241,20 @@ class EventRead(Out):
     payload_available: bool = False
     hash: str
     payload: dict[str, object] | None = None
+
+
+# ── policies ────────────────────────────────────────────────────────────────────────────────────
+class PolicyVersionCreate(In):
+    yaml: str = Field(min_length=1, max_length=300_000)
+    version: int | None = Field(default=None, ge=1)
+    activate: bool = False
+
+
+class PolicyVersionRead(Out):
+    version: int
+    created_at: datetime
+    created_by: UUID
+    sha256: str
+    active: bool = False
+    yaml: str | None = None
+    parsed: dict[str, object] | None = None
