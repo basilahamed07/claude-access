@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from datetime import UTC, datetime, timedelta
 
-from ...contracts.admin import PolicyVersionCreate, PolicyVersionRead
+from fastapi import APIRouter, Depends, Path, Request
+
+from ...audit.replay import simulate
+from ...contracts.admin import (
+    MAX_VERSION,
+    PolicyVersionCreate,
+    PolicyVersionRead,
+    SimulateRequest,
+    SimulateResult,
+)
 from ...contracts.errors import ApiError
 from ...db.tenant_tx import tenant_tx
 from ...policy import store
@@ -52,7 +61,7 @@ async def create_version(slug: str, body: PolicyVersionCreate, request: Request,
 
 
 @router.get("/versions/{version}", response_model=PolicyVersionRead)
-async def get_version(slug: str, version: int, request: Request,
+async def get_version(slug: str, request: Request, version: int = Path(ge=1, le=MAX_VERSION),
                       ctx: TenantContext = Depends(user_ctx("viewer"))) -> PolicyVersionRead:
     async with tenant_tx(get_state(request).engine, ctx.tenant_id) as conn:
         agent = await registry.get_agent(conn, slug)
@@ -61,7 +70,7 @@ async def get_version(slug: str, version: int, request: Request,
 
 
 @router.post("/versions/{version}/activate", response_model=PolicyVersionRead)
-async def activate_version(slug: str, version: int, request: Request,
+async def activate_version(slug: str, request: Request, version: int = Path(ge=1, le=MAX_VERSION),
                            ctx: TenantContext = Depends(user_ctx("admin"))) -> PolicyVersionRead:
     async with tenant_tx(get_state(request).engine, ctx.tenant_id) as conn:
         agent = await registry.get_agent(conn, slug)
@@ -69,3 +78,17 @@ async def activate_version(slug: str, version: int, request: Request,
         row = await store.get_version(conn, agent["id"], version)
         await store.activate(conn, slug, version, agent["updated_at"])
     return PolicyVersionRead(**row, active=True)
+
+
+@router.post("/simulate", response_model=SimulateResult)
+async def simulate_version(slug: str, body: SimulateRequest, request: Request,
+                           ctx: TenantContext = Depends(user_ctx("analyst"))) -> SimulateResult:
+    """What would this policy version have decided for calls the agent really made?"""
+    state = get_state(request)
+    since = None
+    if body.session_ids is None:
+        raw = body.since or "7d"
+        span = timedelta(hours=int(raw[:-1])) if raw.endswith("h") else timedelta(days=int(raw[:-1]))
+        since = datetime.now(UTC) - min(span, timedelta(days=30))
+    return await simulate(state.engine, state.policies, ctx.tenant_id, slug, body.version,
+                          session_ids=body.session_ids, since=since)

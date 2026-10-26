@@ -14,7 +14,13 @@ async def world(api):
     key_b = await b.make_key("b-agent")
     up_b = await b.make_upstream("b-up")
     users_b = (await b.get("/v1/admin/users")).json()["items"]
-    return a, b, {"key_id": key_b["id"], "upstream_id": up_b["id"], "user_id": users_b[0]["id"], "slug": "b-agent"}
+    scanned = await api.client().post("/v1/scan", json={"source": "t", "text": "hello", "session_id": "b-session"},
+                                      headers={"Authorization": f"Bearer {key_b['key']}"})
+    assert scanned.status_code == 200
+    session_b = (await b.get("/v1/admin/sessions")).json()["items"][0]["id"]
+    incident_b = (await b.post("/v1/admin/incidents", {"session_id": session_b, "title": "b only"})).json()["id"]
+    return a, b, {"key_id": key_b["id"], "upstream_id": up_b["id"], "user_id": users_b[0]["id"], "slug": "b-agent",
+                  "session_id": session_b, "incident_id": incident_b}
 
 
 ROUTES = [
@@ -33,6 +39,12 @@ ROUTES = [
     ("POST", "/v1/admin/agents/{slug}/policy/versions", {"yaml": "version: 1\n"}),
     ("GET", "/v1/admin/agents/{slug}/policy/versions/1", None),
     ("POST", "/v1/admin/agents/{slug}/policy/versions/1/activate", {}),
+    ("POST", "/v1/admin/agents/{slug}/policy/simulate", {"version": 1}),
+    ("GET", "/v1/admin/sessions/{session_id}", None),
+    ("GET", "/v1/admin/sessions/{session_id}/timeline", None),
+    ("POST", "/v1/admin/sessions/{session_id}/replay", {}),
+    ("GET", "/v1/admin/sessions/{session_id}/export.json", None),
+    ("PATCH", "/v1/admin/incidents/{incident_id}", {"title": "pwned"}),
 ]
 
 
@@ -45,6 +57,7 @@ async def test_foreign_ids_return_404(world, method, path, body):
     assert r.status_code == 404, (url, r.status_code, r.text)
     # and the victim's data is untouched
     assert (await b.get(f"/v1/admin/agents/{ids['slug']}")).json()["name"] != "pwned"
+    assert [i["title"] for i in (await b.get("/v1/admin/incidents")).json()["items"]] == ["b only"]
 
 
 async def test_lists_only_show_own_rows(world):
@@ -53,6 +66,9 @@ async def test_lists_only_show_own_rows(world):
     slugs = {x["slug"] for x in (await a.get("/v1/admin/agents")).json()["items"]}
     assert slugs == {"a-agent"}
     assert (await a.get("/v1/admin/upstreams")).json() == []
+    for path in ("sessions", "incidents", "alerts"):
+        assert (await a.get(f"/v1/admin/{path}")).json()["items"] == []
+    assert (await a.get("/v1/admin/stats/overview")).json()["active_sessions"] == 0
     emails = {u["email"] for u in (await a.get("/v1/admin/users")).json()["items"]}
     assert emails == {a.email}
 

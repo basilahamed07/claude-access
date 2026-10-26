@@ -8,7 +8,7 @@ import logging
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://agentshield_app@localhost:5432/agentshield"
     owner_database_url: str = "postgresql+asyncpg://postgres@localhost:5432/agentshield"
     worker_database_url: str | None = None
+    retention_database_url: str | None = None
     redis_url: str = "redis://localhost:6379/0"
 
     master_key: str = Field(default="", description="Fernet key for provider secrets")
@@ -32,6 +33,11 @@ class Settings(BaseSettings):
     )
     cors_origins: str = "http://localhost:5173"
     cookie_secure: bool = True
+    metrics_allowed_cidrs: str = Field(default="", description="extra CIDRs allowed to scrape /metrics")
+    metrics_token: str = Field(default="", description="if set, /metrics also needs this bearer token")
+    otel_enabled: bool = True
+    otlp_endpoint: str = ""
+    audit_backlog_warn: int = 10_000
 
     classifier: Literal["null", "stub", "onnx", "protectai_v2", "prompt_guard_2_22m"] = "null"
     classifier_dir: str = ""
@@ -50,6 +56,13 @@ class Settings(BaseSettings):
     judge_timeout_seconds: float = 1.5
 
     spool_dir: str = "/tmp/agentshield-spool"  # noqa: S108
+
+    @field_validator("cors_origins")
+    @classmethod
+    def _no_wildcard_origin(cls, v: str) -> str:
+        if any(o.strip() == "*" for o in v.split(",")):
+            raise ValueError("a wildcard CORS origin is not allowed: list the dashboard origin(s) explicitly")
+        return v
 
     def _secret(self, value: str, name: str) -> str:
         if value:

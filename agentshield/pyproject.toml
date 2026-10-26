@@ -32,9 +32,12 @@ dependencies = [
   "opentelemetry-sdk>=1.26",
   "opentelemetry-instrumentation-fastapi>=0.47b0",
   "opentelemetry-instrumentation-httpx>=0.47b0",
+  "opentelemetry-instrumentation-sqlalchemy>=0.47b0",
+  "opentelemetry-instrumentation-redis>=0.47b0",
 ]
 
 [project.optional-dependencies]
+otlp = ["opentelemetry-exporter-otlp-proto-http>=1.26"]
 ml = ["onnxruntime>=1.18", "tokenizers>=0.19", "numpy>=1.26"]
 dev = [
   "onnx>=1.16",
@@ -79,7 +82,7 @@ mypy_path = "src"
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["regex.*", "asyncpg.*", "onnxruntime.*", "tokenizers.*", "fakeredis.*", "argon2.*", "jwt.*", "ulid.*", "prometheus_client.*"]
+module = ["regex.*", "asyncpg.*", "onnxruntime.*", "tokenizers.*", "fakeredis.*", "argon2.*", "jwt.*", "ulid.*", "prometheus_client.*", "opentelemetry.exporter.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -24,6 +24,7 @@ from ..contracts.admin import TenantSettings
 from ..contracts.events import EventType, Severity
 from ..contracts.scan import ScanFinding, ScanResult
 from ..db.tenant_tx import tenant_tx
+from ..observability import SCAN_LATENCY, timed
 from ..policy.session_state import accumulate_risk, get_risk
 from ..proxy.sessions import SessionRef
 from ..proxy.upstream import UpstreamClient, UpstreamConfig
@@ -75,7 +76,8 @@ def _finding_spans(norm: Normalized, hits: list[RuleHit]) -> list[tuple[int, int
 
 async def scan(content: str | bytes, *, source: str, cfg: ScanConfig) -> ScanResult:
     raw_text = content.decode("utf-8", errors="replace") if isinstance(content, (bytes, bytearray)) else content
-    norm = normalize(content) if len(raw_text) < 8_000 else await asyncio.to_thread(normalize, content)
+    with timed(SCAN_LATENCY.labels("normalizer").observe):
+        norm = normalize(content) if len(raw_text) < 8_000 else await asyncio.to_thread(normalize, content)
     flags: list[str] = []
     if norm.unscannable:
         return ScanResult(verdict="suspicious", confidence=0.3, layers=["normalizer"], flags=["unscannable"],
@@ -87,7 +89,8 @@ async def scan(content: str | bytes, *, source: str, cfg: ScanConfig) -> ScanRes
     if OBFUSCATION & set(norm.transforms):
         flags.append("obfuscated")
 
-    hits = run_rules(norm, cfg.ruleset)
+    with timed(SCAN_LATENCY.labels("rules").observe):
+        hits = run_rules(norm, cfg.ruleset)
     rscore = rule_score(hits)
     layers = ["rules"]
     scores: dict[str, float] = {"rules": round(rscore, 3)}
@@ -95,7 +98,8 @@ async def scan(content: str | bytes, *, source: str, cfg: ScanConfig) -> ScanRes
     if cfg.classifier.active and rscore < MALICIOUS_AT:
         try:
             visible = norm.text + (("\n" + norm.hidden_text) if norm.hidden_text.strip() else "")
-            cscore = await cfg.classifier.ascore(visible)
+            with timed(SCAN_LATENCY.labels("classifier").observe):
+                cscore = await cfg.classifier.ascore(visible)
             layers.append("classifier")
             scores["classifier"] = round(cscore, 3)
         except Exception:                                             # noqa: BLE001
@@ -116,7 +120,8 @@ async def scan(content: str | bytes, *, source: str, cfg: ScanConfig) -> ScanRes
     hostility = combined
     if CLEAN_BELOW <= combined < MALICIOUS_AT:
         if cfg.judge is not None:
-            verdict_judge = await cfg.judge(raw_text if len(raw_text) < 8_000 else norm.text, source)
+            with timed(SCAN_LATENCY.labels("judge").observe):
+                verdict_judge = await cfg.judge(raw_text if len(raw_text) < 8_000 else norm.text, source)
         if verdict_judge is None:
             flags.append("judge_unavailable")
             verdict = "suspicious"

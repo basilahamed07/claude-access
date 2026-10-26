@@ -18,6 +18,7 @@ from ...contracts.errors import ApiError
 from ...contracts.events import EventType
 from ...contracts.ids import new_trace_id
 from ...db.tenant_tx import tenant_tx
+from ...observability import link_trace
 from ...policy.budgets import BudgetStatus, BudgetUnavailable, price_micro_usd
 from ...proxy.anthropic_stream import rewrite_anthropic, rewrite_anthropic_message
 from ...proxy.guard import guard_request
@@ -34,7 +35,9 @@ from ...tenants.context import TenantContext
 from ...tenants.crypto import DecryptionError, decrypt_secret
 from ..state import get_state
 
-router = APIRouter(tags=["proxy"])
+# Proxy routes answer in the provider's own error format so unmodified SDKs understand them.
+PROVIDER_ERRORS: dict[int | str, dict[str, str]] = {c: {"description": "Provider-shaped error"} for c in (400, 401, 403, 404, 413, 422, 429, 500, 502, 504)}
+router = APIRouter(tags=["proxy"], responses=PROVIDER_ERRORS)
 Api = Literal["anthropic", "openai"]
 _ECHO_HEADERS = ("content-type", "retry-after", "request-id", "x-request-id")
 
@@ -77,6 +80,7 @@ async def handle_proxy(request: Request, ctx: TenantContext, api: Api) -> Respon
         raise ApiError("validation_failed", "Request must include 'model' and a 'messages' list", status=400)
 
     trace_id = new_trace_id()
+    link_trace(trace_id)
     request.state.trace_id = trace_id
     headers = {k.lower(): v for k, v in request.headers.items()}
     user_request = first_user_message(body["messages"])

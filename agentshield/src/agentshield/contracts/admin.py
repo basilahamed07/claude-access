@@ -4,10 +4,18 @@ so clients can never set server-owned fields (OWASP API3)."""
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 Slug = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9-]{1,62}$")]
 RiskTier = Literal["low", "medium", "high"]
@@ -22,6 +30,18 @@ class In(BaseModel):
 
 class Out(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
+
+MAX_VERSION = 1_000_000          # policy versions are small integers; anything bigger would overflow the column
+
+
+def reject_nulls(data: Any, names: tuple[str, ...]) -> Any:
+    """PATCH models: leaving a field out means "no change"; sending null for a required column is an error, not a 500."""
+    if isinstance(data, dict):
+        bad = [n for n in names if n in data and data[n] is None]
+        if bad:
+            raise ValueError(f"{', '.join(bad)} cannot be null; omit the field to leave it unchanged")
+    return data
 
 
 # ── auth / tenants ──────────────────────────────────────────────────────────────────────────
@@ -70,6 +90,11 @@ class UserUpdate(In):
     disabled: bool | None = None
     password: Password | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _no_null(cls, data: Any) -> Any:
+        return reject_nulls(data, ("role", "disabled", "password",))
+
 
 class UserRead(Out):
     id: UUID
@@ -101,6 +126,11 @@ class UpstreamUpdate(In):
     api_key: str | None = Field(default=None, max_length=2000, repr=False)
     model_map: dict[str, ModelMapEntry] | None = None
     judge_model: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_null(cls, data: Any) -> Any:
+        return reject_nulls(data, ("name", "base_url", "model_map",))
 
 
 class UpstreamTestRequest(In):
@@ -146,6 +176,11 @@ class AgentUpdate(In):
     key_mode: KeyMode | None = None
     upstream_id: UUID | None = None
     status: Literal["active", "suspended"] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_null(cls, data: Any) -> Any:
+        return reject_nulls(data, ("name", "owner", "purpose", "risk_tier", "mode", "key_mode", "status",))
 
 
 class AgentRead(Out):
@@ -248,7 +283,7 @@ class EventRead(Out):
 # ── policies ────────────────────────────────────────────────────────────────────────────────────
 class PolicyVersionCreate(In):
     yaml: str = Field(min_length=1, max_length=300_000)
-    version: int | None = Field(default=None, ge=1)
+    version: int | None = Field(default=None, ge=1, le=MAX_VERSION)
     activate: bool = False
 
 
@@ -309,3 +344,155 @@ class ScanRuleRead(Out):
 class ScanRulesRead(Out):
     version: str
     rules: list[ScanRuleRead]
+
+
+# ── sessions, replay, incidents, alerts, stats (B17) ─────────────────────────────────────────────
+class SessionRead(Out):
+    id: UUID
+    agent_slug: str
+    end_user: str | None = None
+    user_request: str | None = None
+    risk_score: float
+    started_at: datetime
+    last_seen_at: datetime
+    calls: int = 0
+    blocked: int = 0
+
+
+class TimelineTrace(Out):
+    trace_id: str
+    started_at: datetime
+    events: list[EventRead]
+
+
+class Timeline(Out):
+    session: SessionRead
+    traces: list[TimelineTrace]
+    truncated: bool = False
+
+
+class ReplayStep(Out):
+    seq: int
+    ts: datetime
+    trace_id: str
+    tool: str
+    effect_tag: str | None = None
+    recorded_decision: str | None = None
+    recorded_rule: str | None = None
+    replay_decision: str | None = None
+    replay_rule: str | None = None
+    replay_reason: str | None = None
+    changed: bool = False
+    skipped: str | None = None
+
+
+class ReplayRequest(In):
+    policy_version: int | None = Field(default=None, ge=1, le=MAX_VERSION)
+
+
+class ReplayResult(Out):
+    session_id: UUID
+    policy_version: int | None
+    compared: int
+    skipped: int
+    changed: int
+    redacted_input: bool = True
+    steps: list[ReplayStep]
+
+
+class SimulateRequest(In):
+    version: int = Field(ge=1, le=MAX_VERSION)
+    session_ids: list[UUID] | None = Field(default=None, max_length=200)
+    since: str | None = Field(default=None, pattern=r"^[1-9]\d{0,2}[hd]$")
+
+
+class SimulateResult(Out):
+    version: int
+    sessions: int
+    compared: int
+    skipped: int
+    changed: int
+    newly_blocked: int
+    newly_allowed: int
+    newly_asked: int
+    diffs: list[ReplayStep]
+    truncated: bool = False
+
+
+class IncidentCreate(In):
+    session_id: UUID
+    title: str = Field(min_length=1, max_length=200)
+    severity: Literal["low", "medium", "high", "critical"] = "high"
+
+
+class IncidentPatch(In):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    severity: Literal["low", "medium", "high", "critical"] | None = None
+    status: Literal["open", "investigating", "closed"] | None = None
+
+
+class IncidentRead(Out):
+    id: UUID
+    session_id: UUID
+    title: str
+    severity: str
+    status: str
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class AlertRead(Out):
+    kind: Literal["blocked_call", "malicious_content", "approval_expired", "budget_exceeded", "audit_gap"]
+    ts: datetime
+    seq: int
+    severity: str
+    summary: str
+    agent_slug: str | None = None
+    session_id: UUID | None = None
+    trace_id: str
+    rule_id: str | None = None
+
+
+class CountBy(Out):
+    key: str
+    count: int
+
+
+class SeriesPoint(Out):
+    ts: datetime
+    allowed: int
+    blocked: int
+    asked: int
+
+
+class StatsOverview(Out):
+    window: str
+    calls: int
+    allowed: int
+    blocked: int
+    asked: int
+    malicious_scans: int
+    approvals_pending: int
+    active_sessions: int
+    risky_sessions: int
+    top_rules: list[CountBy]
+    top_agents: list[CountBy]
+    series: list[SeriesPoint]
+
+
+class ExportVerification(Out):
+    verified: bool
+    checked: int
+    first_seq: int | None = None
+    last_seq: int | None = None
+    first_bad_seq: int | None = None
+    reason: str | None = None
+
+
+class SessionExport(Out):
+    exported_at: datetime
+    session: SessionRead
+    events: list[EventRead]
+    chain_head: dict[str, object] | None = None
+    verification: ExportVerification

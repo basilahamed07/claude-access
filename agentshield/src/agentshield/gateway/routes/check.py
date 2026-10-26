@@ -11,6 +11,7 @@ from ...contracts.decision import Decision
 from ...contracts.errors import ApiError
 from ...contracts.ids import new_trace_id
 from ...db.tenant_tx import tenant_tx
+from ...observability import link_trace
 from ...policy.budgets import BudgetUnavailable
 from ...policy.decide import AgentInfo
 from ...proxy.sessions import upsert_session
@@ -42,6 +43,7 @@ async def check(body: CheckRequest, request: Request, ctx: TenantContext = Depen
         unavailable = True
 
     trace_id = new_trace_id()
+    link_trace(trace_id)
     async with tenant_tx(state.engine, ctx.tenant_id) as conn:
         row = await registry.get_proxy_config(conn, ctx.actor_id)
         if row is None or row["status"] != "active":

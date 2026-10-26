@@ -11,6 +11,7 @@ from typing import Any
 
 from ..contracts.events import AuditEvent, EventType
 from ..contracts.ids import new_trace_id
+from ..observability import DECISIONS, current_span_ref
 from .chain import canonical_json
 from .redact import redact, redact_text
 from .spool import Spool
@@ -34,6 +35,10 @@ class Emitter:
     def prepare(self, event: AuditEvent, payload: Mapping[str, Any] | None) -> dict[str, str]:
         """Redact everything, cap the payload and compute its digest. Pure and synchronous."""
         red = redact(dict(payload or {}))
+        if event.decision is not None:
+            DECISIONS.labels(event.decision.value, event.module).inc()
+        if event.otel_span_id is None:
+            event.otel_span_id = current_span_ref()
         event.summary = redact_text(event.summary, [])[:500]
         if event.reason:
             event.reason = redact_text(event.reason, [])[:1000]

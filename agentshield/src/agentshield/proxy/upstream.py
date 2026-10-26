@@ -15,6 +15,7 @@ from typing import Any, Literal
 import httpx
 
 from ..contracts.errors import ApiError
+from ..observability import span
 from ..tenants.urls import UnsafeURL, avalidate_outbound_url
 
 Api = Literal["anthropic", "openai"]
@@ -87,7 +88,8 @@ class UpstreamClient:
         url = build_url(api, cfg.base_url)
         await self._check_url(url)
         try:
-            resp = await self.http.post(url, json=body, headers=build_headers(api, api_key, client_headers))
+            with span("agentshield.upstream", **{"agentshield.upstream": cfg.name, "http.url": url}):
+                resp = await self.http.post(url, json=body, headers=build_headers(api, api_key, client_headers))
         except httpx.TimeoutException as exc:
             raise ApiError("upstream_timeout", "The model provider timed out") from exc
         except httpx.HTTPError as exc:
@@ -105,7 +107,8 @@ class UpstreamClient:
         headers["accept"] = "text/event-stream"
         req = self.http.build_request("POST", url, json=body, headers=headers)
         try:
-            return await self.http.send(req, stream=True)
+            with span("agentshield.upstream.stream", **{"agentshield.upstream": cfg.name, "http.url": url}):
+                return await self.http.send(req, stream=True)
         except httpx.TimeoutException as exc:
             raise ApiError("upstream_timeout", "The model provider timed out") from exc
         except httpx.HTTPError as exc:

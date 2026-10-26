@@ -37,6 +37,9 @@ def register_extra_commands(sub: argparse._SubParsersAction) -> None:  # type: i
     vc = sub.add_parser("verify-chain", help="recompute the audit hash chain for a tenant")
     vc.add_argument("--tenant", required=True, help="tenant slug or id")
     sub.add_parser("worker", help="run the audit worker (consumes the event stream)")
+    sub.add_parser("retention-run", help="purge old payloads and drop expired audit partitions")
+    sd = sub.add_parser("seed-demo", help="create a demo tenant with an example attack (idempotent)")
+    sd.add_argument("--password", help="password for the demo login (default: random, printed once)")
 
 
 async def _resolve_tenant(engine: object, ref: str) -> str | None:
@@ -84,11 +87,45 @@ async def _worker() -> int:
     return 0
 
 
+async def _retention() -> int:
+    import redis.asyncio as aioredis
+
+    from .audit.emitter import Emitter
+    from .audit.retention import retention_run
+    from .audit.spool import Spool
+    from .db.engine import create_engine
+    s = get_settings()
+    engine = create_engine(s.retention_database_url or s.owner_database_url, pool_size=2, statement_timeout_ms=120_000)
+    redis = aioredis.from_url(s.redis_url)
+    try:
+        report = await retention_run(engine, emitter=Emitter(redis, Spool(s.spool_dir)))
+    finally:
+        await redis.aclose()
+        await engine.dispose()
+    print(f"payloads deleted: {report.payloads_deleted} (+{report.incident_payloads_deleted} past incident retention); "
+          f"partitions dropped: {', '.join(report.partitions_dropped) or 'none'}; checkpoints: {report.checkpoints}")
+    return 0
+
+
+async def _seed_demo(password: str | None) -> int:
+    from .demo.seed import seed_demo
+    result = await seed_demo(get_settings(), password=password)
+    if not result.created:
+        print(f"demo tenant '{result.tenant_slug}' already exists; nothing changed")
+        return 0
+    print(f"demo tenant created. Sign in as {result.email} with password: {result.password}")
+    return 0
+
+
 def run_extra_command(args: argparse.Namespace) -> int:
     if args.cmd == "verify-chain":
         return asyncio.run(_verify(args.tenant))
     if args.cmd == "worker":
         return asyncio.run(_worker())
+    if args.cmd == "retention-run":
+        return asyncio.run(_retention())
+    if args.cmd == "seed-demo":
+        return asyncio.run(_seed_demo(args.password))
     print(f"unknown command: {args.cmd}", file=sys.stderr)
     return 2
 

@@ -8,7 +8,7 @@ import logging
 import os
 import socket
 from collections import defaultdict
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ..db.tenant_tx import tenant_tx
+from ..observability import AUDIT_LAG
 from .chain import GENESIS, compute_hash
 from .emitter import STREAM
 
@@ -62,11 +63,14 @@ class AuditWorker:
                 log.error("dropping malformed audit message %s", msg_id)
                 poison.append(msg_id)
         written = 0
+        newest = max((datetime.fromisoformat(e["ts"]) for items in by_tenant.values() for _, e, _ in items), default=None)
         for tenant_id, items in by_tenant.items():
             written += await self._write_tenant(tenant_id, items)
             await self.redis.xack(self.stream, self.group, *[i[0] for i in items])
         if poison:
             await self.redis.xack(self.stream, self.group, *poison)
+        if newest is not None:
+            AUDIT_LAG.set(max(0.0, (datetime.now(UTC) - newest).total_seconds()))
         return written
 
     async def _write_tenant(self, tenant_id: str, items: list[tuple[bytes, dict[str, Any], str]]) -> int:

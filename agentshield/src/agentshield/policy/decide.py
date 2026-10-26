@@ -19,6 +19,7 @@ from ..audit.events import make_event
 from ..contracts.check import CheckResponse, Finding
 from ..contracts.decision import FAIL_OPEN_TAGS, Decision, EffectTag
 from ..contracts.events import EventType, Severity
+from ..observability import POLICY_EVAL, span, timed
 from ..proxy.pipeline import JudgeFactory, ProxyCall
 from ..proxy.sessions import SessionRef
 from ..proxy.tools import ALLOW, Replace, ToolCall, ToolJudge, ToolJudgement
@@ -76,6 +77,13 @@ class PolicyEnforcer:
     async def decide(self, ctx: TenantContext, agent: AgentInfo, session: SessionRef, tool: str,
                      arguments: Any, *, trace_id: str, source: str = "proxy", advised_tag: EffectTag | None = None,
                      budget_unavailable: bool = False) -> CheckResponse:
+        with span("agentshield.policy.decide", **{"agentshield.tool": tool, "agentshield.trace_id": trace_id}):
+            return await self._decide(ctx, agent, session, tool, arguments, trace_id=trace_id, source=source,
+                                      advised_tag=advised_tag, budget_unavailable=budget_unavailable)
+
+    async def _decide(self, ctx: TenantContext, agent: AgentInfo, session: SessionRef, tool: str,
+                      arguments: Any, *, trace_id: str, source: str, advised_tag: EffectTag | None,
+                      budget_unavailable: bool) -> CheckResponse:
         risk = session.risk_score
         evaluation: Evaluation | None = None
         failure: str | None = None
@@ -92,7 +100,8 @@ class PolicyEnforcer:
             digest = args_hash(arguments)
             approved = frozenset({(tool, digest)}) if await is_approved(self.redis, ctx.tenant_id, session.id, tool, digest) \
                 else frozenset()
-            evaluation = evaluate(policy, tool, arguments, SessionState(risk, approved), advised_tag=advised_tag)
+            with timed(POLICY_EVAL.observe):
+                evaluation = evaluate(policy, tool, arguments, SessionState(risk, approved), advised_tag=advised_tag)
         except Exception as exc:                                      # noqa: BLE001
             failure = type(exc).__name__
             log.exception("policy decision failed for tool %s", tool)

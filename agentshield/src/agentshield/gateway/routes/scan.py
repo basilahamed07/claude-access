@@ -8,6 +8,7 @@ from ...contracts.errors import ApiError
 from ...contracts.ids import new_trace_id
 from ...contracts.scan import ScanFinding, ScanRequest, ScanResult
 from ...db.tenant_tx import tenant_tx
+from ...observability import link_trace
 from ...policy.budgets import BudgetUnavailable
 from ...policy.session_state import accumulate_risk
 from ...proxy.sessions import upsert_session
@@ -33,6 +34,7 @@ async def scan_content(body: ScanRequest, request: Request, ctx: TenantContext =
     except BudgetUnavailable:
         pass                                           # scanning is read-only: rate limiting is best effort
     trace_id = new_trace_id()
+    link_trace(trace_id)
     session = None
     row = None
     async with tenant_tx(state.engine, ctx.tenant_id) as conn:
