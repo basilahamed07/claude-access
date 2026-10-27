@@ -39,6 +39,16 @@ export ANTHROPIC_BASE_URL=http://localhost:8000 ANTHROPIC_API_KEY=ask_live_... &
 ```
 New agents start in **monitor mode**: nothing is blocked, but the dashboard shows what would have been. Switch an agent to **enforce** when the policy looks right.
 
+**Windows (PowerShell, Docker Desktop; no `make` or WSL needed):**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\init-env.ps1       # generates secrets in deploy\.env on first run
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env --profile demo up -d --build --wait
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env --profile seed run --rm seed   # optional demo tenant
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env --profile demo --profile seed down   # stop
+```
+If a container fails with `\r: command not found`, Git converted line endings on checkout: run `git config --global core.autocrlf input` and clone again.
+
 Without Docker: `agentshield/scripts/dev-services.sh && agentshield/scripts/run_stack.sh` runs the same stack on a throwaway local database (development only), and `cd dashboard && npm ci && npm run dev` serves the dashboard.
 
 ### See the attack and the block
