@@ -36,9 +36,9 @@ begin
         return encode(b, 'hex')::uuid;
       end $body$;
     $f$;
+    execute 'grant execute on function public.uuidv7() to public';   -- only the fallback lives in public; the built-in is already executable
   end if;
 end $$;
-grant execute on function public.uuidv7() to public;
 
 -- ── core tables ────────────────────────────────────────────────────────────────────────
 create table if not exists tenants (
