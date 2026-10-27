@@ -23,6 +23,12 @@ $lines = @(
   "AGENTSHIELD_JWT_SECRET=$(New-Secret)",
   "AGENTSHIELD_SESSION_SECRET=$(New-Secret)"
 )
+# Like `chmod 600`: create the file empty, restrict it to the current user (by SID, so domain accounts work), and only
+# then write the secrets, so there is no window in which other local users can read them.
+New-Item -ItemType File -Path $envFile | Out-Null
+$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+& icacls.exe $envFile /inheritance:r /grant:r "*${sid}:(F)" | Out-Null
+if ($LASTEXITCODE -ne 0) { Remove-Item $envFile -Force; throw "could not restrict permissions on deploy/.env" }
 # ASCII without BOM and with LF endings, like the bash version.
 [IO.File]::WriteAllText($envFile, ($lines -join "`n") + "`n", (New-Object Text.ASCIIEncoding))
 Write-Host "wrote deploy/.env"
